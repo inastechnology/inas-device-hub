@@ -44,7 +44,7 @@ format = { chain = ["format:ruff", "format:ruff_check"] }
 "format:ruff" = "ruff format ./"
 "format:ruff_check" = "ruff check ./ --fix"
 
-app = { cmd = "python ./src/ina_device_hub/app.py", args = [
+serve = { cmd = "python ./src/ina_device_hub/serve.py", args = [
     "--help",
 ] }
 
