@@ -13,8 +13,6 @@ class TimelapseTask:
     def __init__(self):
         self.storage_connector = storage_connector()
         self.TIMELAPSE_INTERVAL = setting().get("timelapse_interval")
-        if not os.path.exists(self.local_storage_dir):
-            os.makedirs(self.local_storage_dir)
 
         self.routin_scheduler = BlockingScheduler()
 
