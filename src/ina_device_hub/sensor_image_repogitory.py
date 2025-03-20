@@ -22,7 +22,7 @@ class SensorImageRepogitory:
     def save(self, device_id, imageBytes):
         # save image to cloud storage
         image_path = self.storage_connector.save_to_cloud(
-            self.get_image_path(device_id), imageBytes, "image/jpeg"
+            device_id, imageBytes, "image/jpeg"
         )
 
         # insert image path to database

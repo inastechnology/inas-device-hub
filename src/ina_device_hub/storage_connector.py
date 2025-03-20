@@ -81,6 +81,45 @@ class StorageConnector:
             print(f"Error: {e}")
             return None
 
+    def fetch_files(self, prefix, date=None, limit=1):
+        try:
+            images = []
+            response = self.s3.list_objects_v2(
+                Bucket=setting().get("storage_bucket").get("bucket_name"),
+                Prefix=self.get_prefix(prefix, date),
+            )
+            print(response)
+            for content in response.get("Contents", []):
+                try:
+                    presigned_url = self.get_presigned_url(content.get("Key"))
+                    print(presigned_url)
+                    images.append(
+                        {
+                            "key": content.get("Key"),
+                            "last_modified": content.get("LastModified"),
+                            "presigned_url": presigned_url,
+                        }
+                    )
+                except Exception as e:
+                    print(f"Error: {e}")
+            images.sort(key=lambda x: x.get("last_modified"), reverse=True)
+            return images[:limit]
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+        
+    def get_presigned_url(self, file_full_key):
+        try:
+            ret = self.s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": setting().get("storage_bucket").get("bucket_name"), "Key": file_full_key},
+                ExpiresIn=3600,
+            )
+            return ret
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
     def get_file_dir(self, file_key):
         yyyymmdd = time.strftime("%Y%m%d", time.gmtime())
         return os.path.join(setting().get("tenant_id"), file_key, yyyymmdd)
@@ -90,6 +129,12 @@ class StorageConnector:
             self.get_file_dir(file_key),
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()) + ".jpg",
         )
+        
+    def get_prefix(self, file_key, yyyymmdd=None):
+        if yyyymmdd is None:
+            # omit yyyymmdd
+            return os.path.join(setting().get("tenant_id"), file_key)
+        return os.path.join(setting().get("tenant_id"), file_key, yyyymmdd)
 
 
 # singleton instance

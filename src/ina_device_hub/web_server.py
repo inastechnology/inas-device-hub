@@ -78,6 +78,8 @@ def get_device_info(device_id):
     agg_sensor_graph = Utils.create_latest_aggregated_graph_as_html(
         device_id, latest_aggregated_data
     )
+    
+    latest_image = sensor_image_repogitory().fetch_latest(device_id)
 
     template = """
     <html>
@@ -253,6 +255,44 @@ def add_location():
 
     return render_template_string(template)
 
+
+@app.route("/camera/<device_id>", methods=["GET"])
+def get_camera_info(device_id):
+    camera_info = camera_connector().camera_device_repository.get(device_id)
+    if camera_info is None:
+        return jsonify({"error": "device not found"}), 404
+
+    latest_image = storage_connector().fetch_files(f"{device_id}/timelapse", limit=10)
+
+    template = """
+    <html>
+      <body>
+        <h1>INA Device Hub</h1>
+        <h2>{{ device_id }}</h2>
+          <li>Name: {{ info.name }}</li>
+          <li>Location: {{ info.location }}</li>
+          <li>Info: {{ info.info }}</li>
+        <br>
+        <h2>Latest Image</h2>
+        <ul>
+          {% for image in latest_image %}
+          <li>
+           <img 
+              src="{{ image.presigned_url }}" 
+              alt="latest image" 
+              style="max-width: 100%; height: auto; display: block;"
+            >
+          </li>
+          {% endfor %}
+        </ul>
+        <br>
+        <botton onclick="location.href='/camera/{{ device_id }}/preview'">Preview</botton>
+        <botton onclick="location.href='/camera/{{ device_id }}/edit'">Edit</botton>
+      </body>
+    </html>
+    """
+
+    return render_template_string(template, device_id=device_id, info=camera_info, latest_image=latest_image)
 
 @app.route("/camera/<device_id>/preview", methods=["GET"])
 def preview_camera(device_id):

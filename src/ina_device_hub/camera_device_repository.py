@@ -27,7 +27,7 @@ class CameraDeviceRepository:
 
     def save(self):
         with open(self.camera_device_repo_path, "w") as f:
-            json.dump(self.camera_dict, f)
+            json.dump(self.camera_dict, f, indent=4)
 
     def get(self, key):
         return self.camera_dict.get(key)

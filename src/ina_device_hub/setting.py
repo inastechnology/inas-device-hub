@@ -140,7 +140,7 @@ class Setting:
 
     def save(self):
         with open(self.SETTING_FILE_PATH, "w") as f:
-            json.dump(self.settings, f)
+            json.dump(self.settings, f, indent=4)
 
     def get(self, key):
         return self.settings.get(key)

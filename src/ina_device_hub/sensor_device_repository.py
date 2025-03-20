@@ -24,7 +24,7 @@ class SensorDeviceRepository:
 
     def save(self):
         with open(self.device_repo_path, "w") as f:
-            json.dump(self.device_dict, f)
+            json.dump(self.device_dict, f, indent=4)
 
     def get(self, key):
         return self.device_dict.get(key)
