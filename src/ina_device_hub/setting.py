@@ -25,6 +25,7 @@ if not os.path.exists(WORK_DIR):
 try:
     TURSO_DATABASE_URL = os.environ["TURSO_DATABASE_URL"]
     TURSO_AUTH_TOKEN = os.environ["TURSO_AUTH_TOKEN"]
+    TURSO_SYNC_INTERVAL = int(os.environ["TURSO_SYNC_INTERVAL"])
 except KeyError as e:
     exit(f"Please set {e} in .env file")
 
@@ -90,6 +91,7 @@ DEFAULT_SETTINGS = {
     "turso": {
         "database_url": TURSO_DATABASE_URL,
         "auth_token": TURSO_AUTH_TOKEN,
+        "sync_interval": TURSO_SYNC_INTERVAL,
         "local_db_path": os.path.join(os.path.expanduser(WORK_DIR), "ina.db"),
     },
     "storage_bucket": {

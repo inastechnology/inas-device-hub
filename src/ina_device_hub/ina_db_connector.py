@@ -12,7 +12,7 @@ import libsql_experimental as libsql
 from ina_device_hub.setting import setting
 
 
-def commit_and_sync(func):
+def turso_db_commit(func):
     """
     関数実行後、必ず commit と sync を実行するデコレーター
     """
@@ -20,15 +20,14 @@ def commit_and_sync(func):
     def wrapper(self, *args, **kwargs):
         try:
             result = func(self, *args, **kwargs)
+            self.conn.commit()
             return result
         except Exception as e:
             # エラーハンドリング（必要に応じてログ出力等）
             print("Error occurred:", e)
             raise
         finally:
-            print("Commit and sync")
-            self.conn.commit()
-            self.conn.sync()
+            pass
 
     return wrapper
 
@@ -39,10 +38,11 @@ class InaDBConnector:
         db_path = turso_settings.get("local_db_path")
         url = turso_settings.get("database_url")
         auth_token = turso_settings.get("auth_token")
-        self.conn = libsql.connect(db_path, sync_url=url, auth_token=auth_token)
+        sync_interval = turso_settings.get("sync_interval")
+        self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
         self.conn.sync()
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_device_info(
         self,
         device_id: str,
@@ -83,9 +83,8 @@ class InaDBConnector:
                 location,
             ),
         )
-        self.conn.sync()
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_device_status(self, device_id: str, status: str):
         """
         デバイスのステータスを登録／更新します。
@@ -96,7 +95,7 @@ class InaDBConnector:
             (device_id, status),
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_latest_sensor_data(self, device_id: str, data: dict):
         """
         最新センサーデータ（拡張版：溶存酸素、アンモニア、硝酸塩追加）を登録／更新します。
@@ -128,7 +127,7 @@ class InaDBConnector:
             ),
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def insert_aggregated_sensor_data(
         self, device_id: str, yyyymmdd_hh: str, data: dict
     ):
@@ -174,7 +173,7 @@ class InaDBConnector:
             (device_id, start, end),
         ).fetchall()
 
-    @commit_and_sync
+    @turso_db_commit
     def insert_sensor_image_data(
         self, device_id: str, yyyymmddhhmmss: str, image_path: str
     ):
@@ -195,7 +194,7 @@ class InaDBConnector:
             (device_id, num),
         ).fetchall()
 
-    @commit_and_sync
+    @turso_db_commit
     def insert_user_note(self, device_id: str, note: str):
         """
         ユーザーノートを登録します。
@@ -206,7 +205,7 @@ class InaDBConnector:
             ")"
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_sensor_info(
         self,
         sensor_id: str,
@@ -228,7 +227,7 @@ class InaDBConnector:
             "calibration_date = excluded.calibration_date, location = excluded.location",
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def insert_system_alert(
         self,
         device_id: str,
@@ -247,7 +246,7 @@ class InaDBConnector:
             ")"
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def insert_maintenance_log(
         self,
         device_id: str,
@@ -269,7 +268,7 @@ class InaDBConnector:
             ")"
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_plant_growth_data(
         self,
         plant_id: str,
@@ -293,7 +292,7 @@ class InaDBConnector:
             "health_status = excluded.health_status",
         )
 
-    @commit_and_sync
+    @turso_db_commit
     def upsert_fish_tank_info(
         self,
         tank_id: str,
