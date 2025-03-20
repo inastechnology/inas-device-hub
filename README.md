@@ -40,7 +40,8 @@ TODO: Add migration instructions
 We can run the project using the following command.
 
 ```bash
-rye run serve
+rye run backend
+rye run frontend
 ```
 
 And the project will be running on `http://localhost:5151`
@@ -50,14 +51,16 @@ And the project will be running on `http://localhost:5151`
 you can use the following systemd service file to run the project automatically on boot.
 
 > [!IMPORTANT]
-> Make sure to update the `WorkingDirectory` and `ExecStart` values in the service file.
+> Make sure to update the `WorkingDirectory` and `ExecStart` and `User` values in the service file.
 > you should change the "/home/inas-usr/ina-device-hub" to the path of the project.
 
 ```bash
-sudo cp ./systemd/inas-device-hub.service /etc/systemd/system/
+sudo cp ./systemd/inas-device-hub@.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable inas-device-hub
-sudo systemctl start inas-device-hub
+sudo systemctl enable inas-device-hub@backend
+sudo systemctl start inas-device-hub@backend
+sudo systemctl enable inas-device-hub@frontend
+sudo systemctl start inas-device-hub@frontend
 ```
 
 enjoy!
