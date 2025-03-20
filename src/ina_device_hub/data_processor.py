@@ -8,21 +8,18 @@ from ina_device_hub.sensor_device_repository import sensor_device_repository
 from ina_device_hub.sensor_data_repository import sensor_data_repository
 from ina_device_hub.sensor_image_repogitory import sensor_image_repogitory
 from ina_device_hub.sensor_data_queue import SensorDataQueue
-from ina_device_hub.ina_db_connector import InaDBConnector
+from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
 
 
 class DataProcessor:
 
-    def __init__(self, db_connector: InaDBConnector = None):
-        if db_connector is None:
-            db_connector = InaDBConnector()
-
+    def __init__(self):
         self.sensor_data_queue = SensorDataQueue()
         self.sensor_device_repository = sensor_device_repository()
-        self.sensor_data_repository = sensor_data_repository(db_connector)
-        self.sensor_image_repogitory = sensor_image_repogitory(db_connector)
+        self.sensor_data_repository = sensor_data_repository()
+        self.sensor_image_repogitory = sensor_image_repogitory()
         self.image_buffer = {}
         self.audio_buffer = {}
 

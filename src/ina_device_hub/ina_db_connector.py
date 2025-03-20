@@ -313,3 +313,11 @@ class InaDBConnector:
             "fish_species = excluded.fish_species, stocking_density = excluded.stocking_density, "
             "water_volume = excluded.water_volume, last_maintenance_date = excluded.last_maintenance_date, ",
         )
+
+__instance = None
+
+def ina_db_connector():
+    global __instance
+    if not __instance:
+        __instance = InaDBConnector()
+    return __instance

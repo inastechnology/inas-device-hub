@@ -3,14 +3,14 @@
 from datetime import datetime, timezone, timedelta
 import json
 
-from ina_device_hub.ina_db_connector import InaDBConnector
+from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
 
 
 class SensorDataRepository:
-    def __init__(self, db_connector: InaDBConnector):
-        self.db_connector = db_connector
+    def __init__(self, ):
+        self.db_connector = ina_db_connector()
         self.tmp_sensor_data_dict = {}
         self.tmp_file_path = setting().get_work_dir() + "/tmp_sensor_data.json"
 
@@ -189,10 +189,8 @@ class SensorDataRepository:
 __instance = None
 
 
-def sensor_data_repository(db_connector: InaDBConnector = None):
+def sensor_data_repository():
     global __instance
     if not __instance:
-        if db_connector is None:
-            raise ValueError("db_connector must be set")
-        __instance = SensorDataRepository(db_connector)
+        __instance = SensorDataRepository()
     return __instance

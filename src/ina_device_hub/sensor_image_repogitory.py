@@ -5,15 +5,15 @@ from datetime import datetime, timezone, timedelta
 
 from ina_device_hub.setting import setting
 from ina_device_hub.storage_connector import storage_connector
-from ina_device_hub.ina_db_connector import InaDBConnector
+from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.general_log import logger
 
 
 class SensorImageRepogitory:
     IMAGE_BASE_DIR = f"{setting().get('image_base_dir')}/sensor"
 
-    def __init__(self, db_connector: InaDBConnector):
-        self.db_connector = db_connector
+    def __init__(self):
+        self.db_connector = ina_db_connector()
         if not os.path.exists(self.IMAGE_BASE_DIR):
             os.makedirs(self.IMAGE_BASE_DIR)
 
@@ -72,10 +72,8 @@ class SensorImageRepogitory:
 __instance = None
 
 
-def sensor_image_repogitory(db_connector: InaDBConnector = None):
+def sensor_image_repogitory():
     global __instance
     if not __instance:
-        if db_connector is None:
-            raise ValueError("db_connector is required")
-        __instance = SensorImageRepogitory(db_connector)
+        __instance = SensorImageRepogitory()
     return __instance

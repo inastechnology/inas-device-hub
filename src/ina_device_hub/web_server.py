@@ -357,3 +357,6 @@ def video_feed(device_id):
 
 def flask_run():
     app.run(host="0.0.0.0", port=5151)
+
+if __name__ == "__main__":
+    flask_run()

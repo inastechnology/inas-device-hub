@@ -1,10 +1,11 @@
 [Unit]
-Description=INAS Device Hub Service
+Description=INAS Device Hub Service for %I
 After=network.target
 
 [Service]
+Type=simple
 WorkingDirectory=/home/inas-usr/ina-device-hub
-ExecStart=/home/inas-usr/ina-device-hub/serve.sh
+ExecStart=/home/inas-usr/ina-device-hub/start.sh %I
 Restart=always
 User=inas-usr
 Environment=PYTHONUNBUFFERED=1

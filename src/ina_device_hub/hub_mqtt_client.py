@@ -18,6 +18,10 @@ class HubMQTTClient:
         print("MQTT Client started")
         return worker_thread
 
+    def loop(self):
+        print("MQTT Client starting...")
+        self.client.loop_forever()
+
     def connect_mqtt(self) -> None:
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
