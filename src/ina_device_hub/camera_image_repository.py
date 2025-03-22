@@ -20,22 +20,29 @@ class CameraImageRepository:
         images = self.storage_connector.fetch_files(img_key, limit)
         return images
 
-    def get_date_image_by_id(self, camera_id: str, target_time: datetime, limit=10):
-        yyyymmdd = target_time.strftime("%Y%m%d")
-        img_key = self.get_img_key_with_date(camera_id, yyyymmdd)
+    def get_date_image_by_id(self, camera_id: str, date_filter: str, limit=10):
+        img_key = self.get_img_key_with_date(camera_id, date_filter)
+        print(img_key)
         images = self.storage_connector.fetch_files(img_key, limit)
         return images
 
-    def get_date_image_by_location(self, target_time: datetime, location_id: str = None, limit=10):
+    def get_date_image_by_location(self, date_filter: str, location_id: str = None, limit=10):
         ret = {}
         camera_list = self.camera_device_repository.get_by_location(location_id)
         for camera in camera_list:
-            yyyymmdd = target_time.strftime("%Y%m%d")
-            img_key = self.get_img_key_with_date(camera["id"], yyyymmdd)
+            img_key = self.get_img_key_with_date(camera["id"], date_filter)
             images = self.storage_connector.fetch_files(img_key, limit)
             if images:
                 ret[camera["id"]] = images
         return ret
+
+    def download_image(self, key):
+        try:
+            response = self.storage_connector.fetch_from_cloud_as_bytes(key)
+            return response
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return None
 
     @staticmethod
     def get_img_key(camera_id):
@@ -43,7 +50,7 @@ class CameraImageRepository:
 
     @staticmethod
     def get_img_key_with_date(camera_id: str, date: str):
-        return os.path.join(camera_id, date)
+        return os.path.join(CameraImageRepository.get_img_key(camera_id), date)
 
 
 __instance = None

@@ -1,7 +1,7 @@
 import os
 import time
 import boto3
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timezone, timedelta
 
 from ina_device_hub.setting import setting
 from ina_device_hub.storage_connector import storage_connector
@@ -21,15 +21,11 @@ class SensorImageRepogitory:
 
     def save(self, sensor_id, imageBytes):
         # save image to cloud storage
-        image_path = self.storage_connector.save_to_cloud(
-            sensor_id, imageBytes, "image/jpeg"
-        )
+        image_path = self.storage_connector.save_to_cloud(sensor_id, imageBytes, "image/jpeg")
 
         # insert image path to database
         yyyymmddhhmmss = time.strftime("%Y%m%d%H%M%S", time.gmtime())
-        self.db_connector.insert_sensor_image_data(
-            sensor_id, yyyymmddhhmmss, image_path
-        )
+        self.db_connector.insert_sensor_image_data(sensor_id, yyyymmddhhmmss, image_path)
 
     def fetch_latest(self, sensor_id: str, limit: int = 1):
         sensor_images = self.db_connector.fetch_sensor_latest_image(sensor_id, limit)
@@ -41,10 +37,7 @@ class SensorImageRepogitory:
                     "sensor_id": sensor_id,
                     "yyyymmddhhmmss": yyyymmddhhmmss,
                     "image_path": image_path,
-                    "created_at": datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
-                    .replace(tzinfo=timezone.utc)
-                    .astimezone()
-                    .strftime("%Y-%m-%d %H:%M:%S"),
+                    "created_at": datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
                 }
             )
         return sensor_images_as_dict

@@ -2,7 +2,7 @@ import os
 import time
 import boto3
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 
 from ina_device_hub.setting import setting
 from ina_device_hub.general_log import logger
@@ -27,19 +27,12 @@ class StorageConnector:
     def __init__(self):
         if not os.path.exists(self.LOCAL_STORAGE_BASE_DIR):
             os.makedirs(self.LOCAL_STORAGE_BASE_DIR)
-            
+
         self.cache_table_dir = os.path.join(setting().get_work_dir(), ".storage.cache")
         self.cache_table = {}
         if not os.path.exists(self.cache_table_dir):
             os.makedirs(self.cache_table_dir)
-        self.cache_table_path = os.path.join(self.cache_table_dir, "cache_table.json")
-        if os.path.exists(self.cache_table_path):
-            with open(self.cache_table_path, "r") as f:
-                self.cache_table = json.load(f)
-        else:
-            with open(self.cache_table_path, "w") as f:
-                json.dump(self.cache_table, f)
-                
+
         self.s3 = boto3.client(
             "s3",
             endpoint_url=setting().get("storage_bucket").get("endpoint_url"),
@@ -48,7 +41,7 @@ class StorageConnector:
             region_name=setting().get("storage_bucket").get("region"),
         )
 
-    def save_to_cloud(self, file_key, fileBytes, content_type="image/jpeg"):
+    def save_to_cloud(self, file_key, file_bytes, content_type="image/jpeg"):
         """
         Saves the file to cloud storage.
         Automatically generates the file path based on the file key and the current date and time(UTC).
@@ -60,16 +53,16 @@ class StorageConnector:
             self.s3.put_object(
                 Bucket=setting().get("storage_bucket").get("bucket_name"),
                 Key=file_path,
-                Body=fileBytes,
+                Body=file_bytes,
                 ContentType=content_type,
             )
-            logger.info(f"Image uploaded to {file_path}({len(fileBytes)} bytes)")
+            logger.info(f"Image uploaded to {file_path}({len(file_bytes)} bytes)")
         except Exception as e:
             logger.exception(f"Error: {e}")
             return None
         return file_path
 
-    def save_to_local(self, file_key, fileBytes):
+    def save_to_local(self, file_key, file_bytes):
         file_path = os.path.join(
             self.LOCAL_STORAGE_BASE_DIR,
             self.get_file_path(file_key),
@@ -78,7 +71,7 @@ class StorageConnector:
         if not os.path.exists(file_dir):
             os.makedirs(file_dir)
         with open(file_path, "wb") as f:
-            f.write(fileBytes)
+            f.write(file_bytes)
 
         return file_path
 
@@ -94,27 +87,34 @@ class StorageConnector:
             logger.exception(f"Error: {e}")
             return None
 
-    def fetch_files(self, prefix, date=None, limit=1, cache=True):
+    def fetch_files(self, prefix, limit=1, cache=True):
         """
         Fetches the files from cloud storage.
         Automatically generates the prefix based on the file key and the date.
         e.g.) prefix: {tenant_id}/{file_key}/{yyyymmdd}
         """
+        print(self.get_prefix(prefix))
         try:
             images = []
             response = self.s3.list_objects_v2(
                 Bucket=setting().get("storage_bucket").get("bucket_name"),
-                Prefix=self.get_prefix(prefix, date),
+                Prefix=self.get_prefix(prefix),
                 MaxKeys=limit,
             )
             for content in response.get("Contents", []):
                 try:
                     cache_item = self.cache_table.get(content.get("Key"))
-                    if cache_item and int(cache_item.get("expire_in",0)) > int(datetime.now(timezone.utc).timestamp()):
+                    if cache_item and int(cache_item.get("expire_in", 0)) > int(datetime.now(timezone.utc).timestamp()):
                         logger.info(f"Cache hit: {content.get('Key')}")
-                        images.append(self.cache_table.get(content.get("Key")))
+                        images.append(
+                            {
+                                "key": cache_item.get("key"),
+                                "last_modified": cache_item.get("last_modified"),
+                                "presigned_url": cache_item.get("presigned_url"),
+                            }
+                        )
                         continue
-                    
+
                     presigned_url = self.get_presigned_url(content.get("Key"))
                     logger.info(presigned_url)
                     images.append(
@@ -128,9 +128,9 @@ class StorageConnector:
                     if cache:
                         self.cache_table[content.get("Key")] = {
                             "key": content.get("Key"),
-                            "last_modified": content.get("LastModified").isoformat(),
+                            "last_modified": content.get("LastModified"),
                             "presigned_url": presigned_url,
-                            "expire_in": int(datetime.now(timezone.utc).timestamp() + 24 * 60 * 60),
+                            "expire_in": int(datetime.now(UTC).timestamp() + 24 * 60 * 60),
                         }
                 except Exception as e:
                     logger.exception(f"Error: {e}")
@@ -139,7 +139,7 @@ class StorageConnector:
         except Exception as e:
             logger.exception(f"Error: {e}")
             return None
-        
+
     def get_presigned_url(self, file_full_key):
         try:
             ret = self.s3.generate_presigned_url(
@@ -161,12 +161,9 @@ class StorageConnector:
             self.get_file_dir(file_key),
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()) + ".jpg",
         )
-        
-    def get_prefix(self, file_key, yyyymmdd=None):
-        if yyyymmdd is None:
-            # omit yyyymmdd
-            return os.path.join(setting().get("tenant_id"), file_key)
-        return os.path.join(setting().get("tenant_id"), file_key, yyyymmdd)
+
+    def get_prefix(self, file_key):
+        return os.path.join(setting().get("tenant_id"), file_key)
 
 
 # singleton instance

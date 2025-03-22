@@ -237,66 +237,86 @@ def get_location_detail(location_id):
         # 'location_id': None, 'type': 'INACD', 'timelapse': True,
         # 'ip_address': '192.168.xxx.xxx', 'username': '',
         # 'password': '[REDACTED]'}
-        today_images = camera_image_repository().get_date_image_by_id(camera["id"], datetime.now(UTC), limit=6 * 24)
+        date_filter = datetime.now(UTC).strftime("%Y%m%d")
+        today_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=6 * 24)
 
         camera_latest_images[camera["id"]] = today_images[0] if today_images else None
 
     if location_id is None:
         location_id = "public"
     template = """
-    <html>
-        <body>
-        <h1>INA Device Hub</h1>
-        <h2>{{ location_id }}</h2>
-        <ul>
-            <li>Name: {{ info.name }}</li>
-            <li>Description: {{ info.description }}</li>
-        </ul>
-        <h2>Sensors</h2>
-        <!-- show sensor stat card -->
-        <ul>
-            {% for sensor in sensors %}
-            <li>
-                <h3>{{ sensor.name }}</h3>
-                <h4>Latest Data</h4>
-                <ul>
-                    <li>Temp: {{ sensor.latest.temp }}</li>
-                    <li>TDS: {{ sensor.latest.tds }}</li>
-                </ul>
-                <div>
-                    {{ sensor.graph | safe }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INA Device Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+    <div class="mb-4 text-center">
+        <h1 class="display-5">INA Device Hub</h1>
+        <h2 class="text-secondary">{{ location_id }}</h2>
+    </div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <h4 class="card-title">{{ info.name }}</h4>
+            <p class="card-text">{{ info.description }}</p>
+        </div>
+    </div>
+
+    <h3 class="mb-3">Sensors</h3>
+    <div class="row">
+        {% for sensor in sensors %}
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">{{ sensor.name }}</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">Latest Data</h6>
+                    <ul class="list-group list-group-flush mb-3">
+                        <li class="list-group-item">Temp: {{ sensor.latest.temp }}</li>
+                        <li class="list-group-item">TDS: {{ sensor.latest.tds }}</li>
+                    </ul>
+                    <div>{{ sensor.graph | safe }}</div>
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
-        <h2>Cameras</h2>
-        <!-- show camera image -->
-        <ul>
-            {% for camera in cameras %}
-            <li>
-                <h3>{{ camera.name }}</h3>
-                <ul>
-                    <li>Location: {{ camera.location_id }}</li>
-                    <li>Type: {{ camera.type }}</li>
-                    <li>Timelapse: {{ camera.timelapse }}</li>
-                    <li>IP Address: {{ camera.ip_address }}</li>
-                    <li>Username: {{ camera.username }}</li>
-                    <li>Password: REDACTED</li>
-                </ul>
-                <div>
-                    <img 
-                        src="{{ camera_latest_images[camera.id].presigned_url }}" 
-                        alt="latest image" 
-                        style="max-width: 100%; height: auto; display: block;"
-                    >
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3 class="mb-3">Cameras</h3>
+    <div class="row">
+        {% for camera in cameras %}
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">{{ camera.name }}</h5>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Location: {{ camera.location_id }}</li>
+                        <li class="list-group-item">Type: {{ camera.type }}</li>
+                        <li class="list-group-item">Timelapse: {{ camera.timelapse }}</li>
+                        <li class="list-group-item">IP Address: {{ camera.ip_address }}</li>
+                        <li class="list-group-item">Username: {{ camera.username }}</li>
+                        <li class="list-group-item">Password: REDACTED</li>
+                    </ul>
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
-        <br>
-        <botton onclick="location.href='/locations'">Back</botton>
-        </body>
-    </html>
+                <img src="{{ camera_latest_images[camera.id].presigned_url }}" class="card-img-bottom img-fluid" alt="latest image">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="text-center mt-4">
+        <a href="/locations" class="btn btn-secondary">Back</a>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
     """
 
     return render_template_string(
@@ -356,7 +376,7 @@ def get_camera_info(sensor_id):
     if camera_info is None:
         return jsonify({"error": "device not found"}), 404
 
-    latest_image = storage_connector().fetch_files(f"{sensor_id}/timelapse", limit=10)
+    latest_image = camera_image_repository().get_by_id(sensor_id, limit=10)
 
     template = """
     <html>

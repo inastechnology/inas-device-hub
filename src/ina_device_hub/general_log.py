@@ -1,7 +1,6 @@
-from logging import getLogger, Formatter, DEBUG, INFO, WARNING, ERROR, CRITICAL, Logger
-from logging.handlers import RotatingFileHandler
-from logging import StreamHandler
 import os
+from logging import DEBUG, Formatter, Logger, StreamHandler, getLogger
+from logging.handlers import RotatingFileHandler
 
 from ina_device_hub.setting import setting
 
@@ -25,9 +24,7 @@ def get_rotate_file_logger(name: str, log_file: str) -> Logger:
     formatter = Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # setup file handler
-    rotate_handler = RotatingFileHandler(
-        f"{log_dir}/{log_file}", maxBytes=log_size, backupCount=log_num
-    )
+    rotate_handler = RotatingFileHandler(f"{log_dir}/{log_file}", maxBytes=log_size, backupCount=log_num)
     rotate_handler.setLevel(DEBUG)
     rotate_handler.setFormatter(formatter)
     logger.addHandler(rotate_handler)

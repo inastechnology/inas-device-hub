@@ -70,6 +70,50 @@ class InaDBConnector:
     def __reindex(self):
         self.conn.execute("REINDEX")
 
+    def fetch_location_all(self):
+        """
+        全ロケーション情報を取得します。
+        """
+        return self.conn.execute("SELECT * FROM location_table").fetchall()
+
+    def upsert_location(self, location_id: str, info: dict):
+        # location_id TEXT PRIMARY KEY,
+        # name TEXT,
+        # description TEXT,
+        # longitude REAL,
+        # latitude REAL,
+        # info TEXT,
+        # location_type TEXT,
+        # country TEXT,
+        # city TEXT,
+        # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        # updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        self.conn.execute(
+            "INSERT INTO location_table (location_id, name, description, longitude, latitude, info, location_type, country, city) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(location_id) DO UPDATE SET "
+            "name = excluded.name, "
+            "description = excluded.description, "
+            "longitude = excluded.longitude, "
+            "latitude = excluded.latitude, "
+            "info = excluded.info, "
+            "location_type = excluded.location_type, "
+            "country = excluded.country, "
+            "city = excluded.city, "
+            "updated_at = CURRENT_TIMESTAMP",
+            (
+                location_id,
+                info.get("name", location_id),
+                info.get("description", ""),
+                info.get("longitude", -1000.0),
+                info.get("latitude", -1000.0),
+                json.dumps(info.get("info", {})),
+                info.get("location_type", "unknown"),
+                info.get("country", "unknown"),
+                info.get("city", "unknown"),
+            ),
+        )
+
     def fetch_sensors_all(self):
         """
         全センサーデバイスを取得します。
@@ -273,7 +317,7 @@ class InaDBConnector:
         """
         return self.conn.execute("SELECT * FROM location_info").fetchall()
 
-    def upsert_evaluation_result(self, location_id: str, input_data: dict, output_data: dict):
+    def upsert_evaluation_result(self, location_id: str, input_data: str, output_data: str):
         """
         評価結果を登録／更新します。
         INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
@@ -286,24 +330,14 @@ class InaDBConnector:
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (location_id) REFERENCES location_table(location_id)
         """
-        query = (
-            "INSERT INTO evaluation_result (location_id, input_data, output_data, summary) "
-            "VALUES (?, ?, ?, ?) "
-            "ON CONFLICT(location_id) DO UPDATE SET "
-            "input_data = excluded.input_data, "
-            "output_data = excluded.output_data, "
-            "summary = excluded.summary, "
-            "updated_at = CURRENT_TIMESTAMP"
-        )
-        self.conn.execute(
-            query,
-            (
-                location_id,
-                json.dumps(input_data),
-                json.dumps(output_data),
-                "",
-            ),
-        )
+        if location_id is None:
+            query = "INSERT INTO ai_agent_evaluation (input_data, output_data) VALUES (?, ?)"
+            param = (input_data, output_data)
+        else:
+            query = "INSERT INTO ai_agent_evaluation (location_id, input_data, output_data) VALUES (?, ?, ?)"
+            param = (location_id, input_data, output_data)
+
+        self.conn.execute(query, param)
 
 
 __instance = None

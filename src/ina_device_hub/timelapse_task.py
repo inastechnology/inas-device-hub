@@ -5,12 +5,15 @@ from apscheduler.schedulers.background import BlockingScheduler
 from ina_device_hub.camera_connector import camera_connector
 from ina_device_hub.camera_image_repository import camera_image_repository
 from ina_device_hub.general_log import logger
+from ina_device_hub.image_utils import ImageUtils
+from ina_device_hub.sensor_data_repository import sensor_data_repository
 from ina_device_hub.setting import setting
 
 
 class TimelapseTask:
     def __init__(self):
         self.camera_image_repository = camera_image_repository()
+        self.sensor_data_repository = sensor_data_repository()
         self.TIMELAPSE_INTERVAL = setting().get("timelapse_interval")
 
         self.routin_scheduler = BlockingScheduler()
@@ -40,6 +43,10 @@ class TimelapseTask:
 
             img_bytes = camera.take_picture(sensor_id)
             if img_bytes:
+                is_on, confidence = ImageUtils.is_led_on_with_confidence(img_bytes)
+                print(f"Light status: {is_on}, confidence: {confidence}")
+                # TODO: location_id should be fetched from the camera info
+                self.sensor_data_repository.update_light_status(None, is_on, confidence)
                 self.camera_image_repository.save_to_cloud(sensor_id, img_bytes)
             else:
                 logger.error(f"Failed to take picture: {sensor_id}")

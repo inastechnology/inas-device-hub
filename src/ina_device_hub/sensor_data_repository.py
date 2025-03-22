@@ -1,6 +1,6 @@
 # sensor data repository
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 import json
 
 from ina_device_hub.ina_db_connector import ina_db_connector
@@ -9,15 +9,21 @@ from ina_device_hub.setting import setting
 
 
 class SensorDataRepository:
-    def __init__(self, ):
+    def __init__(
+        self,
+    ):
         self.db_connector = ina_db_connector()
         self.tmp_sensor_data_dict = {}
         self.tmp_file_path = setting().get_work_dir() + "/tmp_sensor_data.json"
+        self.light_status_dict = {}
 
         # load tmp sensor data
         self.__load_tmp_sensor_data()
 
     def add(self, sensor_id: str, seqId: int, data: dict):
+        # construct extra
+        data["extra"] = {"light_status": self.light_status_dict.get(None, {})}
+
         # latest data record
         self.__insert_latest_data(sensor_id, data)
 
@@ -25,7 +31,7 @@ class SensorDataRepository:
         if sensor_id not in self.tmp_sensor_data_dict:
             self.tmp_sensor_data_dict[sensor_id] = {}
 
-        current_yyyymmdd_hh = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+        current_yyyymmdd_hh = datetime.now(UTC).strftime("%Y%m%d%H")
         if current_yyyymmdd_hh not in self.tmp_sensor_data_dict[sensor_id]:
             self.tmp_sensor_data_dict[sensor_id][current_yyyymmdd_hh] = []
 
@@ -37,17 +43,11 @@ class SensorDataRepository:
         # whether aggregate or not
         # older than 1hours
         for yyyymmdd_hh in list(self.tmp_sensor_data_dict[sensor_id].keys()):
-            if datetime.strptime(yyyymmdd_hh, "%Y%m%d%H").replace(
-                tzinfo=timezone.utc
-            ) < (datetime.now(timezone.utc) - timedelta(hours=1)):
-                logger.info(
-                    f"aggregate data: sensor_id={sensor_id}, yyyymmdd_hh={yyyymmdd_hh}"
-                )
+            if datetime.strptime(yyyymmdd_hh, "%Y%m%d%H").replace(tzinfo=UTC) < (datetime.now(UTC) - timedelta(hours=1)):
+                logger.info(f"aggregate data: sensor_id={sensor_id}, yyyymmdd_hh={yyyymmdd_hh}")
                 aggregated_data = self.__aggregate_data(sensor_id, yyyymmdd_hh)
                 if aggregated_data:
-                    self.__insert_aggreated_data(
-                        sensor_id, yyyymmdd_hh, aggregated_data
-                    )
+                    self.__insert_aggreated_data(sensor_id, yyyymmdd_hh, aggregated_data)
                     del self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
                     self.__save_tmp_sensor_data()
 
@@ -82,14 +82,9 @@ class SensorDataRepository:
             "ammonia": data_as_tupple[6],
             "nitrate": data_as_tupple[7],
             "location_id": data_as_tupple[8],
-            "created_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S")
-            .replace(tzinfo=timezone.utc)
-            .astimezone(),
-            "updated_at": datetime.strptime(data_as_tupple[10], "%Y-%m-%d %H:%M:%S")
-            .replace(tzinfo=timezone.utc)
-            .astimezone(),
+            "created_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).astimezone(),
+            "updated_at": datetime.strptime(data_as_tupple[10], "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).astimezone(),
             "extra": extra,
-            
         }
 
     def get_latest_aggreated(self, sensor_id: str, limit: int = 50):
@@ -114,9 +109,7 @@ class SensorDataRepository:
                     "dissolved_oxygen": d[5],
                     "ammonia": d[6],
                     "nitrate": d[7],
-                    "yyyymmddhh": datetime.strptime(str(d[8]), "%Y%m%d%H")
-                    .replace(tzinfo=timezone.utc)
-                    .astimezone(),
+                    "yyyymmddhh": datetime.strptime(str(d[8]), "%Y%m%d%H").replace(tzinfo=UTC).astimezone(),
                     "created_at": d[9],
                     "extra": extra,
                 }
@@ -141,6 +134,13 @@ class SensorDataRepository:
                 )
                 del self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
                 self.__save_tmp_sensor_data()
+
+    def update_light_status(self, location_id: str, status: bool, confidence: float):
+        self.light_status_dict[location_id] = {
+            "status": status,
+            "confidence": confidence,
+            "updated_at": datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
     def __aggregate_data(self, sensor_id, yyyymmdd_hh):
         if sensor_id not in self.tmp_sensor_data_dict:

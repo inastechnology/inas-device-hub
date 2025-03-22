@@ -64,7 +64,12 @@ markupsafe==3.0.2
     # via werkzeug
 narwhals==1.30.0
     # via plotly
+numpy==2.2.4
+    # via ina-device-hub
+    # via opencv-python
 openai==1.68.2
+    # via ina-device-hub
+opencv-python==4.11.0.86
     # via ina-device-hub
 packaging==24.2
     # via plotly

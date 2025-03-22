@@ -2,8 +2,9 @@ import os
 
 from ina_device_hub.data_processor import DataProcessor
 from ina_device_hub.hub_mqtt_client import HubMQTTClient
-from ina_device_hub.timelapse_task import timelapse_task
+from ina_device_hub.ina_agent import ina_agent
 from ina_device_hub.setting import setting
+from ina_device_hub.timelapse_task import timelapse_task
 
 
 def run():
@@ -17,6 +18,9 @@ def run():
 
     # timelapse task
     timelapse_task().start()
+
+    # INA Agentの起動
+    ina_agent().start()
 
     # MQTTクライアントを開始(ブロッキング)
     hub_mqtt_client.loop()

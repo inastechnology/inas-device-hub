@@ -13,8 +13,9 @@ class AIConnector:
     def analyze_image(self, target_image: bytes, file_format: str = "jpg", system_prompt: str = None, message: str = None, max_tokens: int = 2048) -> str:
         image_analyze_setting = self.ai_setting["image_analyze"]
         api_key = image_analyze_setting["api_key"]
+        base_url = image_analyze_setting.get("base_url")
         model = image_analyze_setting["model"]
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url=base_url)
 
         if system_prompt is None:
             system_prompt = """
@@ -46,8 +47,9 @@ class AIConnector:
     def analyze_text(self, message: str, system_prompt: str = None, max_tokens: int = 2048) -> str:
         text_analyze_setting = self.ai_setting["text_analyze"]
         api_key = text_analyze_setting["api_key"]
+        base_url = text_analyze_setting.get("base_url")
         model = text_analyze_setting["model"]
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, base_url=base_url)
 
         messages = []
         if system_prompt is not None:

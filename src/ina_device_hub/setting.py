@@ -71,19 +71,24 @@ except KeyError:
     AI_ENABLED = False
 
 try:
-    IMAGE_ANALYZE_API_KEY = os.environ["IMAGE_ANALYZE_API_KEY"]
-    IMAGE_ANALYZE_MODEL = os.environ["IMAGE_ANALYZE_MODEL"]
-    TEXT_ANALYZE_API_KEY = os.environ["TEXT_ANALYZE_API_KEY"]
-    TEXT_ANALYZE_MODEL = os.environ["TEXT_ANALYZE_MODEL"]
+    AI_AGENT_SCHEDULE_START = os.environ.get("AI_AGENT_SCHEDULE_START", "09:30")
+    AI_IMAGE_ANALYZE_API_KEY = os.environ.get("AI_IMAGE_ANALYZE_API_KEY", None)
+    AI_IMAGE_ANALYZE_BASE_URL = os.environ.get("AI_IMAGE_ANALYZE_BASE_URL", None)
+    AI_IMAGE_ANALYZE_MODEL = os.environ.get("AI_IMAGE_ANALYZE_MODEL", None)
+
+    AI_TEXT_ANALYZE_API_KEY = os.environ.get("AI_TEXT_ANALYZE_API_KEY", None)
+    AI_TEXT_ANALYZE_BASE_URL = os.environ.get("AI_TEXT_ANALYZE_BASE_URL", None)
+    AI_TEXT_ANALYZE_MODEL = os.environ.get("AI_TEXT_ANALYZE_MODEL", None)
 
 except KeyError:
     if AI_ENABLED:
         sys.exit("Please set AI settings in .env file")
     else:
-        IMAGE_ANALYZE_API_KEY = ""
-        IMAGE_ANALYZE_MODEL = ""
-        TEXT_ANALYZE_API_KEY = ""
-        TEXT_ANALYZE_MODEL = ""
+        AI_AI_AGENT_SCHEDULE_START = None
+        AI_IMAGE_ANALYZE_API_KEY = None
+        AI_IMAGE_ANALYZE_MODEL = None
+        AI_TEXT_ANALYZE_API_KEY = None
+        AI_TEXT_ANALYZE_MODEL = None
 
 # other settings
 try:
@@ -107,6 +112,7 @@ def get_device_id():
 
 # Default settings
 DEFAULT_SETTINGS = {
+    "language": os.environ.get("LANGUAGE", "en"),
     "tenant_id": "00000000-0000-0000-0000-000000000000",
     "device_id": get_device_id(),
     "device_name": DEVICE_NAME,
@@ -139,13 +145,18 @@ DEFAULT_SETTINGS = {
     },
     "ai": {
         "enabled": False,
+        "schedule": {
+            "start": AI_AGENT_SCHEDULE_START,
+        },
         "image_analyze": {
-            "api_key": "",
-            "model": "",
+            "api_key": AI_IMAGE_ANALYZE_API_KEY,
+            "base_url": AI_IMAGE_ANALYZE_BASE_URL,
+            "model": AI_IMAGE_ANALYZE_MODEL,
         },
         "text_analyze": {
-            "api_key": "",
-            "model": "",
+            "api_key": AI_TEXT_ANALYZE_API_KEY,
+            "base_url": AI_TEXT_ANALYZE_BASE_URL,
+            "model": AI_TEXT_ANALYZE_MODEL,
         },
     },
 }
