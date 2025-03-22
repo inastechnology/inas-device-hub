@@ -34,10 +34,10 @@ class DataProcessor:
                 # queue からメッセージを取得
                 message = self.sensor_data_queue.get()
                 self.sensor_device_repository.add(
-                    message["device_id"],
+                    message["sensor_id"],
                     {
-                        "name": message["device_id"],
-                        "type": message["device_id"].split("-")[0],
+                        "name": message["sensor_id"],
+                        "type": message["sensor_id"].split("-")[0],
                         "detected_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
                     },
                 )
@@ -45,7 +45,7 @@ class DataProcessor:
                 # ここでメッセージの処理を実施
                 if message["kind"] == "status":
                     self.process_sensor_data(
-                        message["device_id"],
+                        message["sensor_id"],
                         message["kind"],
                         message["payload"],
                         message["seqId"],
@@ -53,7 +53,7 @@ class DataProcessor:
 
                 elif message["kind"] == "image":
                     self.process_sensor_image(
-                        message["device_id"],
+                        message["sensor_id"],
                         message["kind"],
                         message["payload"],
                         message["seqId"],
@@ -63,8 +63,8 @@ class DataProcessor:
                     pass
                 else:
                     # 規定外のメッセージの場合はログ出力
-                    print(
-                        f"Device {message['device_id']} sensor data: {message['payload']}"
+                    logger.error(
+                        f"Device {message['sensor_id']} sensor data: {message['payload']}"
                     )
                 # キューからメッセージを取り出し完了
                 self.sensor_data_queue.task_done()
@@ -73,17 +73,16 @@ class DataProcessor:
                 time.sleep(1)
                 continue
             except Exception as e:
-                print(f"Error: {e}")
                 logger.exception(e)
 
                 time.sleep(1)
                 continue
 
-    def process_sensor_data(self, device_id, kind, payload, seqId):
+    def process_sensor_data(self, sensor_id, kind, payload, seqId):
         """
         Parse sensor data payload
         Args:
-            device_id (str): device id
+            sensor_id (str): device id
             kind (str): message kind
             payload (str): message payload
                 json string - sensor data
@@ -92,18 +91,18 @@ class DataProcessor:
         # バイト列の場合は文字列に変換
         if isinstance(payload, bytes):
             payload = payload.decode("utf-8")
-        print(f"Device {device_id} sensor data: {payload}")
+        logger.debug(f"Device {sensor_id} sensor data: {payload}")
 
         # 文字列から辞書型に変換
         payload_as_dict = json.loads(payload)
 
-        self.sensor_data_repository.add(device_id, seqId, payload_as_dict)
+        self.sensor_data_repository.add(sensor_id, seqId, payload_as_dict)
 
-    def process_sensor_image(self, device_id, kind, payload, seqId):
+    def process_sensor_image(self, sensor_id, kind, payload, seqId):
         """
         Parse image payload
         Args:
-            device_id (str): device id
+            sensor_id (str): device id
             kind (str): message kind
             payload (str): message payload
                 json string - image info. first received data
@@ -122,11 +121,11 @@ class DataProcessor:
             payload = json.loads(payload)
             image_size = payload["size"]
             # add image data to buffer
-            if device_id not in self.image_buffer:
-                self.image_buffer[device_id] = {}
+            if sensor_id not in self.image_buffer:
+                self.image_buffer[sensor_id] = {}
 
-            self.image_buffer[device_id] = dict()
-            self.image_buffer[device_id][seqId] = {
+            self.image_buffer[sensor_id] = dict()
+            self.image_buffer[sensor_id][seqId] = {
                 "size": image_size,
                 "image": bytearray(),
             }
@@ -136,27 +135,27 @@ class DataProcessor:
         except UnicodeDecodeError:
             pass
 
-        if seqId not in self.image_buffer[device_id]:
-            logger.error(f"[{device_id}:{seqId}] image info not found")
+        if seqId not in self.image_buffer[sensor_id]:
+            logger.error(f"[{sensor_id}:{seqId}] image info not found")
             return
 
         image_fragment = bytearray(payload)
 
-        self.image_buffer[device_id][seqId]["image"].extend(image_fragment)
+        self.image_buffer[sensor_id][seqId]["image"].extend(image_fragment)
         # check whether all image data received
         if (
-            len(self.image_buffer[device_id][seqId]["image"])
-            >= self.image_buffer[device_id][seqId]["size"]
+            len(self.image_buffer[sensor_id][seqId]["image"])
+            >= self.image_buffer[sensor_id][seqId]["size"]
         ):
             # all image data received
-            print(f"[{device_id}:{seqId}] all image data received")
+            logger.debug(f"[{sensor_id}:{seqId}] all image data received")
             # all image data received
-            image_data = self.image_buffer[device_id][seqId]["image"].copy()
-            del self.image_buffer[device_id][seqId]
+            image_data = self.image_buffer[sensor_id][seqId]["image"].copy()
+            del self.image_buffer[sensor_id][seqId]
             # save image data
-            self.sensor_image_repogitory.save(device_id, image_data)
+            self.sensor_image_repogitory.save(sensor_id, image_data)
 
-    def process_sensor_audio(self, device_id, kind, payload, seqId):
+    def process_sensor_audio(self, sensor_id, kind, payload, seqId):
         """
         Parse audio payload
         1. receive audio info(json data) including audio data counts
@@ -166,11 +165,11 @@ class DataProcessor:
             payload = json.loads(payload)
             audio_count = payload["count"]
             # add audio data to buffer
-            if device_id not in self.audio_buffer:
-                self.audio_buffer[device_id] = {}
+            if sensor_id not in self.audio_buffer:
+                self.audio_buffer[sensor_id] = {}
 
-            self.audio_buffer[device_id] = dict()
-            self.audio_buffer[device_id][seqId] = {
+            self.audio_buffer[sensor_id] = dict()
+            self.audio_buffer[sensor_id][seqId] = {
                 "count": 0,
                 "all_count": audio_count,
                 "audio": bytearray(),
@@ -181,23 +180,23 @@ class DataProcessor:
         except UnicodeDecodeError:
             pass
 
-        if seqId not in self.audio_buffer[device_id]:
-            logger.error(f"[{device_id}:{seqId}] audio info not found")
+        if seqId not in self.audio_buffer[sensor_id]:
+            logger.error(f"[{sensor_id}:{seqId}] audio info not found")
             return
 
         audio_fragment = bytearray(payload)
 
-        self.audio_buffer[device_id][seqId]["audio"].extend(audio_fragment)
-        self.audio_buffer[device_id][seqId]["count"] += 1
+        self.audio_buffer[sensor_id][seqId]["audio"].extend(audio_fragment)
+        self.audio_buffer[sensor_id][seqId]["count"] += 1
         # check whether all audio data received
         if (
-            self.audio_buffer[device_id][seqId]["count"]
-            >= self.audio_buffer[device_id][seqId]["all_count"]
+            self.audio_buffer[sensor_id][seqId]["count"]
+            >= self.audio_buffer[sensor_id][seqId]["all_count"]
         ):
             # all audio data received
-            print(f"[{device_id}:{seqId}] all audio data received")
+            logger.debug(f"[{sensor_id}:{seqId}] all audio data received")
             # all audio data received
-            audio_data = self.audio_buffer[device_id][seqId]["audio"].copy()
-            del self.audio_buffer[device_id][seqId]
+            audio_data = self.audio_buffer[sensor_id][seqId]["audio"].copy()
+            del self.audio_buffer[sensor_id][seqId]
             # save audio data
-            # self.sensor_audio_repogitory.save(device_id, audio_data)
+            # self.sensor_audio_repogitory.save(sensor_id, audio_data)

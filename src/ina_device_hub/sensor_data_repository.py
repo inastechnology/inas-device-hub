@@ -17,52 +17,63 @@ class SensorDataRepository:
         # load tmp sensor data
         self.__load_tmp_sensor_data()
 
-    def add(self, device_id: str, seqId: int, data: dict):
+    def add(self, sensor_id: str, seqId: int, data: dict):
         # latest data record
-        self.__insert_latest_data(device_id, data)
+        self.__insert_latest_data(sensor_id, data)
 
         # aggregate data record
-        if device_id not in self.tmp_sensor_data_dict:
-            self.tmp_sensor_data_dict[device_id] = {}
+        if sensor_id not in self.tmp_sensor_data_dict:
+            self.tmp_sensor_data_dict[sensor_id] = {}
 
         current_yyyymmdd_hh = datetime.now(timezone.utc).strftime("%Y%m%d%H")
-        if current_yyyymmdd_hh not in self.tmp_sensor_data_dict[device_id]:
-            self.tmp_sensor_data_dict[device_id][current_yyyymmdd_hh] = []
+        if current_yyyymmdd_hh not in self.tmp_sensor_data_dict[sensor_id]:
+            self.tmp_sensor_data_dict[sensor_id][current_yyyymmdd_hh] = []
 
-        self.tmp_sensor_data_dict[device_id][current_yyyymmdd_hh].append(data)
+        self.tmp_sensor_data_dict[sensor_id][current_yyyymmdd_hh].append(data)
 
         # save tmp sensor data
         self.__save_tmp_sensor_data()
 
         # whether aggregate or not
         # older than 1hours
-        for yyyymmdd_hh in list(self.tmp_sensor_data_dict[device_id].keys()):
+        for yyyymmdd_hh in list(self.tmp_sensor_data_dict[sensor_id].keys()):
             if datetime.strptime(yyyymmdd_hh, "%Y%m%d%H").replace(
                 tzinfo=timezone.utc
             ) < (datetime.now(timezone.utc) - timedelta(hours=1)):
                 logger.info(
-                    f"aggregate data: device_id={device_id}, yyyymmdd_hh={yyyymmdd_hh}"
+                    f"aggregate data: sensor_id={sensor_id}, yyyymmdd_hh={yyyymmdd_hh}"
                 )
-                aggregated_data = self.__aggregate_data(device_id, yyyymmdd_hh)
+                aggregated_data = self.__aggregate_data(sensor_id, yyyymmdd_hh)
                 if aggregated_data:
                     self.__insert_aggreated_data(
-                        device_id, yyyymmdd_hh, aggregated_data
+                        sensor_id, yyyymmdd_hh, aggregated_data
                     )
-                    del self.tmp_sensor_data_dict[device_id][yyyymmdd_hh]
+                    del self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
                     self.__save_tmp_sensor_data()
 
-    def get_latest(self, device_id: str):
-        data_as_tupple = self.db_connector.fetch_latest_sensor_data(device_id)
+    def get_latest(self, sensor_id: str):
+        data_as_tupple = self.db_connector.fetch_latest_sensor_data(sensor_id)
         if data_as_tupple is None:
             return None
 
-        # device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, created_at, updated_at, extra
+        # sensor_id TEXT PRIMARY KEY,
+        # temp REAL,
+        # tds REAL,
+        # ec REAL,
+        # ph REAL,
+        # dissolved_oxygen REAL,
+        # ammonia REAL,
+        # nitrate REAL,
+        # location_id TEXT,
+        # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        # updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        # extra TEXT,
         try:
-            extra = json.loads(data_as_tupple[10])
+            extra = json.loads(data_as_tupple[11])
         except json.JSONDecodeError:
             extra = {}
         return {
-            "device_id": data_as_tupple[0],
+            "sensor_id": data_as_tupple[0],
             "temp": data_as_tupple[1],
             "tds": data_as_tupple[2],
             "ec": data_as_tupple[3],
@@ -70,21 +81,23 @@ class SensorDataRepository:
             "dissolved_oxygen": data_as_tupple[5],
             "ammonia": data_as_tupple[6],
             "nitrate": data_as_tupple[7],
-            "created_at": datetime.strptime(data_as_tupple[8], "%Y-%m-%d %H:%M:%S")
+            "location_id": data_as_tupple[8],
+            "created_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S")
             .replace(tzinfo=timezone.utc)
             .astimezone(),
-            "updated_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S")
+            "updated_at": datetime.strptime(data_as_tupple[10], "%Y-%m-%d %H:%M:%S")
             .replace(tzinfo=timezone.utc)
             .astimezone(),
             "extra": extra,
+            
         }
 
-    def get_latest_aggreated(self, device_id: str):
-        data = self.db_connector.fetch_latest_aggregated_sensor_data(device_id)
+    def get_latest_aggreated(self, sensor_id: str, limit: int = 50):
+        data = self.db_connector.fetch_latest_aggregated_sensor_data(sensor_id, limit)
         if data is None:
             return None
 
-        # device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra
+        # sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra
         ret = []
         for d in data:
             try:
@@ -93,7 +106,7 @@ class SensorDataRepository:
                 extra = {}
             ret.append(
                 {
-                    "device_id": d[0],
+                    "sensor_id": d[0],
                     "temp": d[1],
                     "tds": d[2],
                     "ec": d[3],
@@ -110,40 +123,40 @@ class SensorDataRepository:
             )
         return ret
 
-    def get_aggreated_by_range(self, device_id: str, start: str, end: str):
+    def get_aggreated_by_range(self, sensor_id: str, start: str, end: str):
         return self.db_connector.fetch_aggregated_sensor_data_by_range(
-            device_id,
+            sensor_id,
             start,
             end,
         )
 
-    def force_aggregate(self, device_id):
-        for yyyymmdd_hh in list(self.tmp_sensor_data_dict[device_id].keys()):
-            aggregated_data = self.__aggregate_data(device_id, yyyymmdd_hh)
+    def force_aggregate(self, sensor_id):
+        for yyyymmdd_hh in list(self.tmp_sensor_data_dict[sensor_id].keys()):
+            aggregated_data = self.__aggregate_data(sensor_id, yyyymmdd_hh)
             if aggregated_data:
                 self.__insert_aggreated_data(
-                    device_id,
+                    sensor_id,
                     yyyymmdd_hh,
                     aggregated_data,
                 )
-                del self.tmp_sensor_data_dict[device_id][yyyymmdd_hh]
+                del self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
                 self.__save_tmp_sensor_data()
 
-    def __aggregate_data(self, device_id, yyyymmdd_hh):
-        if device_id not in self.tmp_sensor_data_dict:
+    def __aggregate_data(self, sensor_id, yyyymmdd_hh):
+        if sensor_id not in self.tmp_sensor_data_dict:
             return None
 
-        if yyyymmdd_hh not in self.tmp_sensor_data_dict[device_id]:
+        if yyyymmdd_hh not in self.tmp_sensor_data_dict[sensor_id]:
             return None
 
-        if len(self.tmp_sensor_data_dict[device_id][yyyymmdd_hh]) == 0:
+        if len(self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]) == 0:
             return None
 
         # aggregate
         temps = []
         tdss = []
 
-        for data in self.tmp_sensor_data_dict[device_id][yyyymmdd_hh]:
+        for data in self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]:
             if "temp" in data and data["temp"] != -1000:
                 temps.append(data["temp"])
             if "tds" in data and data["tds"] != -1000:
@@ -157,15 +170,15 @@ class SensorDataRepository:
             "tds": avg_tds,
         }
 
-    def __insert_latest_data(self, device_id: str, data: dict):
+    def __insert_latest_data(self, sensor_id: str, data: dict):
         self.db_connector.upsert_latest_sensor_data(
-            device_id,
+            sensor_id,
             data,
         )
 
-    def __insert_aggreated_data(self, device_id: str, yyyymmdd_hh: str, data: dict):
+    def __insert_aggreated_data(self, sensor_id: str, yyyymmdd_hh: str, data: dict):
         self.db_connector.insert_aggregated_sensor_data(
-            device_id,
+            sensor_id,
             yyyymmdd_hh,
             data,
         )

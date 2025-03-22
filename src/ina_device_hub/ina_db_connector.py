@@ -4,11 +4,13 @@
 # - センサーデータ保存用のテーブルを作成する
 # - センサーデータをデータベースに保存する
 # - センサーデータをデータベースから取得する
-
-from datetime import datetime, timezone
 import json
+import os
+import re
+
 import libsql_experimental as libsql
 
+from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
 
 
@@ -24,7 +26,7 @@ def turso_db_commit(func):
             return result
         except Exception as e:
             # エラーハンドリング（必要に応じてログ出力等）
-            print("Error occurred:", e)
+            logger.exception("Error occurred:", e)
             raise
         finally:
             pass
@@ -39,72 +41,106 @@ class InaDBConnector:
         url = turso_settings.get("database_url")
         auth_token = turso_settings.get("auth_token")
         sync_interval = turso_settings.get("sync_interval")
-        self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
+        try:
+            self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
+
+        except ValueError as e:
+            logger.error("Error occurred:", e)
+            if "orphan index" in str(e):
+                logger.info("orphan index error occurred. Reindexing the database.")
+                self.__reindex()
+                logger.info("Reindexing done. Reconnecting to the database.")
+                self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
+            elif "malformed" in str(e):
+                logger.info("Database is corrupted. Deleting the database file.")
+                # delete target files
+                db_name = os.path.basename(db_path)
+                target_re = re.compile(rf"{db_name}.*")
+                for file in os.listdir(os.path.dirname(db_path)):
+                    if target_re.match(file):
+                        logger.info(f"Deleting {file}")
+                        os.remove(os.path.join(os.path.dirname(db_path), file))
+                logger.info("Database file deleted. Reconnecting to the database.")
+                self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
+            else:
+                raise
+
         self.conn.sync()
 
-    @turso_db_commit
-    def upsert_device_info(
-        self,
-        device_id: str,
-        info: dict,
-        device_type: str = None,
-        firmware_version: str = None,
-        installation_date: datetime = None,
-        location: str = None,
-        customer_id: str = None,
-        device_group: str = None,
-    ):
+    def __reindex(self):
+        self.conn.execute("REINDEX")
+
+    def fetch_sensors_all(self):
         """
-        デバイス情報をデータベースに保存（更新）します。
-        ※ 新たにデバイス種別、ファームウェア、設置日、設置場所、顧客ID、グループも登録可能です。
+        全センサーデバイスを取得します。
         """
-        query = (
-            "INSERT INTO device_info (device_id, info, customer_id, device_group, device_type, firmware_version, installation_date, location) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET "
+        return self.conn.execute("SELECT * FROM sensor_info").fetchall()
+
+    def fetch_sensor(self, sensor_id: str):
+        """
+        指定された sensor_id に紐づくセンサーデバイスを取得します。
+        """
+        return self.conn.execute("SELECT * FROM sensor_info WHERE sensor_id = ?", (sensor_id,)).fetchone()
+
+    def upsert_sensor(self, sensor_id: str, info: dict):
+        """
+        センサーデバイス情報を登録／更新します。
+        INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
+        CREATE TABLE IF NOT EXISTS sensor_info (
+            sensor_id TEXT PRIMARY KEY,
+            info TEXT,
+            sensor_type TEXT,
+            firmware_version TEXT,
+            installation_date TIMESTAMP,
+            location_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (location_id) REFERENCES location_table(location_id)
+        );
+        """
+        self.conn.execute(
+            "INSERT INTO sensor_info (sensor_id, info, sensor_type, firmware_version, installation_date, location_id) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(sensor_id) DO UPDATE SET "
             "info = excluded.info, "
-            "customer_id = excluded.customer_id, "
-            "device_group = excluded.device_group, "
-            "device_type = excluded.device_type, "
+            "sensor_type = excluded.sensor_type, "
             "firmware_version = excluded.firmware_version, "
             "installation_date = excluded.installation_date, "
-            "location = excluded.location, "
-        )
-        self.conn.execute(
-            query,
+            "location_id = excluded.location_id, "
+            "updated_at = CURRENT_TIMESTAMP",
             (
-                device_id,
-                json.dumps(info),
-                customer_id,
-                device_group,
-                device_type,
-                firmware_version,
-                installation_date,
-                location,
+                sensor_id,
+                json.dumps(info.get("info", {})),
+                info.get("sensor_type"),
+                info.get("firmware_version"),
+                info.get("installation_date"),
+                info.get("location_id"),
             ),
         )
 
-    @turso_db_commit
-    def upsert_device_status(self, device_id: str, status: str):
+    def fetch_sensors_by_location_id(self, location_id: str = None):
         """
-        デバイスのステータスを登録／更新します。
+        指定された location_id に紐づくセンサーデバイスを取得します。
         """
-        self.conn.execute(
-            "INSERT INTO device_status (device_id, status) VALUES (?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET status = excluded.status",
-            (device_id, status),
-        )
+        if location_id is None:
+            query = "SELECT * FROM sensor_info WHERE location_id IS NULL"
+            param = ()
+        else:
+            query = "SELECT * FROM sensor_info WHERE location_id = ?"
+            param = (location_id,)
+
+        return self.conn.execute(query, param).fetchall()
 
     @turso_db_commit
-    def upsert_latest_sensor_data(self, device_id: str, data: dict):
+    def upsert_latest_sensor_data(self, sensor_id: str, data: dict):
         """
         最新センサーデータ（拡張版：溶存酸素、アンモニア、硝酸塩追加）を登録／更新します。
         INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
         """
         self.conn.execute(
-            "INSERT INTO latest_sensor_data (device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, extra) "
+            "INSERT INTO latest_sensor_data (sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, extra) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET "
+            "ON CONFLICT(sensor_id) DO UPDATE SET "
             "temp = excluded.temp, "
             "tds = excluded.tds, "
             "ec = excluded.ec, "
@@ -115,7 +151,7 @@ class InaDBConnector:
             "updated_at = CURRENT_TIMESTAMP, "
             "extra = excluded.extra",
             (
-                device_id,
+                sensor_id,
                 data.get("temp", -1000.0),
                 data.get("tds", -1000.0),
                 data.get("ec", -1000.0),
@@ -128,16 +164,14 @@ class InaDBConnector:
         )
 
     @turso_db_commit
-    def insert_aggregated_sensor_data(
-        self, device_id: str, yyyymmdd_hh: str, data: dict
-    ):
+    def insert_aggregated_sensor_data(self, sensor_id: str, yyyymmdd_hh: str, data: dict):
         """
-        集計済センサーデータ（拡張版）を登録します。複合キー（device_id, yyyymmddhh）。
+        集計済センサーデータ（拡張版）を登録します。複合キー（sensor_id, yyyymmddhh）。
         """
         self.conn.execute(
-            "INSERT INTO aggregated_sensor_data (device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
+            "INSERT INTO aggregated_sensor_data (sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
             "VALUES ("
-            f"\"{device_id}\", {round(data.get('temp', -1000.0), 2)}, {round(data.get('tds', -1000.0), 2)}, "
+            f'"{sensor_id}", {round(data.get("temp", -1000.0), 2)}, {round(data.get("tds", -1000.0), 2)}, '
             f"{round(data.get('ec', -1000.0), 2)}, {round(data.get('ph', -1000.0), 2)}, "
             f"{round(data.get('dissolved_oxygen', -1000.0), 2)}, "
             f"{round(data.get('ammonia', -1000.0), 2)}, {round(data.get('nitrate', -1000.0), 2)}, "
@@ -145,176 +179,135 @@ class InaDBConnector:
             ") "
         )
 
-    def fetch_latest_sensor_data(self, device_id: str):
+    def fetch_latest_sensor_data(self, sensor_id: str):
         """
         最新センサーデータを取得します。
         """
-        return self.conn.execute(
-            "SELECT * FROM latest_sensor_data WHERE device_id = ?", (device_id,)
-        ).fetchone()
+        return self.conn.execute("SELECT * FROM latest_sensor_data WHERE sensor_id = ?", (sensor_id,)).fetchone()
 
-    def fetch_latest_aggregated_sensor_data(self, device_id: str, limit: int = 50):
+    def fetch_latest_aggregated_sensor_data(self, sensor_id: str, limit: int = 50):
         """
         最新集計済センサーデータを取得します。
         """
         return self.conn.execute(
-            "SELECT * FROM aggregated_sensor_data WHERE device_id = ? ORDER BY yyyymmddhh DESC LIMIT ?",
-            (device_id, limit),
+            "SELECT * FROM aggregated_sensor_data WHERE sensor_id = ? ORDER BY yyyymmddhh DESC LIMIT ?",
+            (sensor_id, limit),
         ).fetchall()
 
-    def fetch_aggregated_sensor_data_by_range(
-        self, device_id: str, start: str, end: str
-    ):
+    def fetch_aggregated_sensor_data_by_daily(self, sensor_id: str, yyyymmdd: str):
         """
         集計済センサーデータを取得します。
+        daily: yyyymmdd
         """
         return self.conn.execute(
-            "SELECT * FROM aggregated_sensor_data WHERE device_id = ? AND yyyymmddhh BETWEEN ? AND ?",
-            (device_id, start, end),
+            "SELECT * FROM aggregated_sensor_data WHERE sensor_id = ? AND yyyymmddhh LIKE ?",
+            (sensor_id, f"{yyyymmdd}%"),
         ).fetchall()
 
-    @turso_db_commit
-    def insert_sensor_image_data(
-        self, device_id: str, yyyymmddhhmmss: str, image_path: str
-    ):
+    def fetch_aggregated_sensor_data_by_range(self, sensor_id: str, start: str, end: str):
         """
-        センサー画像データを登録します。
-        """
-        self.conn.execute(
-            "INSERT INTO sensor_image_data (device_id, yyyymmddhhmmss, image_path) VALUES "
-            f'("{device_id}", "{yyyymmddhhmmss}", "{image_path}")'
-        )
-
-    def fetch_sensor_latest_image(self, device_id: str, num: int = 1):
-        """
-        センサー画像データを取得します。
+        集計済センサーデータを取得します。
+        range: start <= yyyymmddhh <= end
         """
         return self.conn.execute(
-            "SELECT * FROM sensor_image_data WHERE device_id = ? ORDER BY yyyymmddhhmmss DESC LIMIT ?",
-            (device_id, num),
+            "SELECT * FROM aggregated_sensor_data WHERE sensor_id = ? AND yyyymmddhh BETWEEN ? AND ?",
+            (sensor_id, start, end),
         ).fetchall()
 
-    @turso_db_commit
-    def insert_user_note(self, device_id: str, note: str):
+    def fetch_camera_all(self):
         """
-        ユーザーノートを登録します。
+        全カメラデバイスを取得します。
+        """
+        return self.conn.execute("SELECT * FROM camera_info").fetchall()
+
+    def fetch_camera_by_location_id(self, location_id: str = None):
+        """
+        指定された location_id に紐づくカメラデバイスを取得します。
+        """
+        if location_id is None:
+            query = "SELECT * FROM camera_info WHERE location_id IS NULL"
+            param = ()
+        else:
+            query = "SELECT * FROM camera_info WHERE location_id = ?"
+            param = (location_id,)
+
+        return self.conn.execute(query, param).fetchall()
+
+    def insert_camera_info(self, camera_id: str, location_id: str = None):
+        """
+        カメラデバイス情報を登録します。
         """
         self.conn.execute(
-            "INSERT INTO user_note (device_id, note) VALUES ("
-            f'"{device_id}", "{note}"'
-            ")"
+            "INSERT INTO camera_info (id, location_id) VALUES (?, ?)",
+            (camera_id, location_id),
         )
 
-    @turso_db_commit
-    def upsert_sensor_info(
-        self,
-        sensor_id: str,
-        device_id: str,
-        sensor_type: str,
-        calibration_date: datetime,
-        location: str,
-    ):
+    def upsert_camera_device(self, camera_id: str, info: dict):
         """
-        センサー情報（センサーID、種別、校正日、設置位置）を登録／更新します。
+        カメラデバイス情報を登録／更新します。
+        INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
         """
         self.conn.execute(
-            "INSERT INTO sensor_info (sensor_id, device_id, sensor_type, calibration_date, location) "
-            "VALUES ("
-            f"\"{sensor_id}\", \"{device_id}\", \"{sensor_type}\", \"{calibration_date.strftime('%Y-%m-%d %H:%M:%S')}\", \"{location}\""
-            ") "
-            "ON CONFLICT(sensor_id) DO UPDATE SET "
-            "device_id = excluded.device_id, sensor_type = excluded.sensor_type, "
-            "calibration_date = excluded.calibration_date, location = excluded.location",
+            "INSERT INTO camera_info (id, location_id, ip_address, username, password, extra) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "location_id = excluded.location_id, "
+            "ip_address = excluded.ip_address, "
+            "username = excluded.username, "
+            "password = excluded.password, "
+            "updated_at = CURRENT_TIMESTAMP, "
+            "extra = excluded.extra",
+            (
+                camera_id,
+                info.get("location_id"),
+                info.get("ip_address"),
+                info.get("username"),
+                info.get("password"),
+                json.dumps(info.get("extra", {})),
+            ),
         )
 
-    @turso_db_commit
-    def insert_system_alert(
-        self,
-        device_id: str,
-        alert_type: str,
-        severity: str,
-        description: str,
-        resolved: int = 0,
-    ):
+    def fetch_all_location(self):
         """
-        システムアラートを登録します。
+        全ロケーション情報を取得します。
         """
+        return self.conn.execute("SELECT * FROM location_info").fetchall()
+
+    def upsert_evaluation_result(self, location_id: str, input_data: dict, output_data: dict):
+        """
+        評価結果を登録／更新します。
+        INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
+
+        evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        location_id TEXT,
+        input_data TEXT,
+        output_data TEXT,
+        summary TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (location_id) REFERENCES location_table(location_id)
+        """
+        query = (
+            "INSERT INTO evaluation_result (location_id, input_data, output_data, summary) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(location_id) DO UPDATE SET "
+            "input_data = excluded.input_data, "
+            "output_data = excluded.output_data, "
+            "summary = excluded.summary, "
+            "updated_at = CURRENT_TIMESTAMP"
+        )
         self.conn.execute(
-            "INSERT INTO system_alerts (device_id, alert_type, severity, description, event_timestamp, resolved) "
-            "VALUES ("
-            f"\"{device_id}\", \"{alert_type}\", \"{severity}\", \"{description}\", \"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}\", {resolved}"
-            ")"
+            query,
+            (
+                location_id,
+                json.dumps(input_data),
+                json.dumps(output_data),
+                "",
+            ),
         )
 
-    @turso_db_commit
-    def insert_maintenance_log(
-        self,
-        device_id: str,
-        maintenance_date: datetime,
-        performed_by: str,
-        description: str,
-        status: str,
-    ):
-        """
-        メンテナンスログ（定期点検、修理履歴等）を登録します。
-        """
-        maintenance_date_str_as_utc = maintenance_date.astimezone(
-            timezone.utc
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        self.conn.execute(
-            "INSERT INTO maintenance_logs (device_id, maintenance_date, performed_by, description, status) "
-            "VALUES ("
-            f'"{device_id}", "{maintenance_date_str_as_utc}", "{performed_by}", "{description}", "{status}"'
-            ")"
-        )
-
-    @turso_db_commit
-    def upsert_plant_growth_data(
-        self,
-        plant_id: str,
-        species: str,
-        growth_stage: str,
-        last_measurement_date: datetime,
-        height: float,
-        health_status: str,
-    ):
-        """
-        植物成長データを登録／更新します。
-        """
-        self.conn.execute(
-            "INSERT INTO plant_growth_data (plant_id, species, growth_stage, last_measurement_date, height, health_status) "
-            "VALUES ("
-            f"\"{plant_id}\", \"{species}\", \"{growth_stage}\", \"{last_measurement_date.strftime('%Y-%m-%d %H:%M:%S')}\", {height}, \"{health_status}\""
-            ") "
-            "ON CONFLICT(plant_id) DO UPDATE SET "
-            "species = excluded.species, growth_stage = excluded.growth_stage, "
-            "last_measurement_date = excluded.last_measurement_date, height = excluded.height, "
-            "health_status = excluded.health_status",
-        )
-
-    @turso_db_commit
-    def upsert_fish_tank_info(
-        self,
-        tank_id: str,
-        fish_species: str,
-        stocking_density: float,
-        water_volume: float,
-        last_maintenance_date: datetime,
-    ):
-        """
-        水槽情報（魚種、飼育密度、水量、最終メンテナンス日）を登録／更新します。
-        """
-        self.conn.execute(
-            "INSERT INTO fish_tank_info (tank_id, fish_species, stocking_density, water_volume, last_maintenance_date) "
-            "VALUES ("
-            f"\"{tank_id}\", \"{fish_species}\", {stocking_density}, {water_volume}, \"{last_maintenance_date.strftime('%Y-%m-%d %H:%M:%S')}\""
-            ") "
-            "ON CONFLICT(tank_id) DO UPDATE SET "
-            "fish_species = excluded.fish_species, stocking_density = excluded.stocking_density, "
-            "water_volume = excluded.water_volume, last_maintenance_date = excluded.last_maintenance_date, ",
-        )
 
 __instance = None
+
 
 def ina_db_connector():
     global __instance

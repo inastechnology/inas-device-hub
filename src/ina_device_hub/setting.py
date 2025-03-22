@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 from dotenv import load_dotenv
+import sys
 
 load_dotenv()
 
@@ -63,6 +64,27 @@ except KeyError:
     SENSOR_SAVE_IMAGE = False
     SENSOR_SAVE_AUDIO = False
 
+# AI settings
+try:
+    AI_ENABLED = bool("true" == os.environ["AI_ENABLED"].lower())
+except KeyError:
+    AI_ENABLED = False
+
+try:
+    IMAGE_ANALYZE_API_KEY = os.environ["IMAGE_ANALYZE_API_KEY"]
+    IMAGE_ANALYZE_MODEL = os.environ["IMAGE_ANALYZE_MODEL"]
+    TEXT_ANALYZE_API_KEY = os.environ["TEXT_ANALYZE_API_KEY"]
+    TEXT_ANALYZE_MODEL = os.environ["TEXT_ANALYZE_MODEL"]
+
+except KeyError:
+    if AI_ENABLED:
+        sys.exit("Please set AI settings in .env file")
+    else:
+        IMAGE_ANALYZE_API_KEY = ""
+        IMAGE_ANALYZE_MODEL = ""
+        TEXT_ANALYZE_API_KEY = ""
+        TEXT_ANALYZE_MODEL = ""
+
 # other settings
 try:
     TIMELAPSE_INTERVAL = int(os.environ["TIMELAPSE_INTERVAL"])
@@ -114,6 +136,17 @@ DEFAULT_SETTINGS = {
         "save_image": SENSOR_SAVE_IMAGE,
         "save_audio": SENSOR_SAVE_AUDIO,
         "blacklist": [],
+    },
+    "ai": {
+        "enabled": False,
+        "image_analyze": {
+            "api_key": "",
+            "model": "",
+        },
+        "text_analyze": {
+            "api_key": "",
+            "model": "",
+        },
     },
 }
 

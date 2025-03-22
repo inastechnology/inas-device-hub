@@ -3,7 +3,8 @@ import os
 import uuid
 
 from ina_device_hub.setting import setting
-
+from ina_device_hub.general_log import logger
+from ina_device_hub.ina_db_connector import ina_db_connector
 
 class CameraDeviceRepository:
     camera_device_repo_path = os.path.join(
@@ -11,6 +12,7 @@ class CameraDeviceRepository:
     )
 
     def __init__(self):
+        self.db_connector = ina_db_connector()
         self.camera_dict = {}
         self.load()
 
@@ -32,19 +34,27 @@ class CameraDeviceRepository:
     def get(self, key):
         return self.camera_dict.get(key)
 
-    def add(self, device_id: str = None, info: dict = {}):
-        if device_id is None:
-            # generate new device_id
-            device_id = f"INACD-{str(uuid.uuid4())}"
+    def get_by_location(self, location_id: str = None):
+        ret = []
+        for camera_id, camera_info in self.camera_dict.items():
+            if camera_info.get("location_id") == location_id:
+                ret.append(camera_info)
+        return ret
 
-        if device_id not in self.camera_dict:
-            info["id"] = device_id
-            self.camera_dict[device_id] = info
+    def add(self, camera_id: str = None, info: dict = {}):
+        if camera_id is None:
+            # generate new camera_id
+            camera_id = f"INACD-{str(uuid.uuid4())}"
+
+        if camera_id not in self.camera_dict:
+            info["id"] = camera_id
+            self.camera_dict[camera_id] = info
+            self.db_connector.upsert_camera_device(camera_id, info)
             self.save()
 
-    def remove(self, device_id):
-        if device_id in self.camera_dict:
-            del self.camera_dict[device_id]
+    def remove(self, camera_id):
+        if camera_id in self.camera_dict:
+            del self.camera_dict[camera_id]
             self.save()
 
     def get_all(self):

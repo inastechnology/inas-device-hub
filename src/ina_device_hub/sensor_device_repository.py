@@ -1,52 +1,83 @@
 import json
 import os
 
-from ina_device_hub.setting import setting
-
+from ina_device_hub.general_log import logger
+from ina_device_hub.ina_db_connector import ina_db_connector
 
 class SensorDeviceRepository:
-    device_repo_path = os.path.join(setting().get_work_dir(), ".device_list.json")
 
     def __init__(self):
-        self.device_dict = {}
-        self.load()
+        self.tmp_sensor_data_dict = {}
+        self.db_connector = ina_db_connector()
 
-    def load(self):
-        if not os.path.exists(self.device_repo_path):
-            # create empty file
-            with open(self.device_repo_path, "w") as f:
-                f.write("{}")
-        try:
-            with open(self.device_repo_path, "r") as f:
-                self.device_dict = json.load(f)
-        except FileNotFoundError:
-            pass
-
-    def save(self):
-        with open(self.device_repo_path, "w") as f:
-            json.dump(self.device_dict, f, indent=4)
-
-    def get(self, key):
-        return self.device_dict.get(key)
-
-    def add(self, device_id, info: dict):
-        if device_id not in self.device_dict:
-            info["id"] = device_id
-            self.device_dict[device_id] = info
-            self.save()
-
-    def remove(self, device_id):
-        if device_id in self.device_dict:
-            del self.device_dict[device_id]
-            self.save()
-
+    def get_by_id(self, sensor_id):
+        return self.db_connector.fetch_sensor(sensor_id)
+    
     def get_all(self):
-        return self.device_dict
+        return self.db_connector.fetch_sensors_all()
+    
+    def get_by_location(self, location_id):
+        db_ret_as_tuplelist = self.db_connector.fetch_sensors_by_location_id(location_id)
+        ret = []
+        for db_ret_as_tuple in db_ret_as_tuplelist:
+            ret.append({
+                "id": db_ret_as_tuple[0],
+                "name": db_ret_as_tuple[1],
+                "description": db_ret_as_tuple[2],
+                "location_id": db_ret_as_tuple[3],
+                "created_at": db_ret_as_tuple[4],
+                "updated_at": db_ret_as_tuple[5],
+            })
+            
+        return ret
+    
+    def add(self, sensor_id, info):
+        if self.__is_exist(sensor_id):
+            return
+        
+        self.db_connector.upsert_sensor(sensor_id, info)
+        self.tmp_sensor_data_dict[sensor_id] = info
+            
+        
+    def __is_exist(self, sensor_id):
+        if sensor_id in self.tmp_sensor_data_dict:
+            return True
+        
+        # check db
+        try:
+            ret_db  = self.db_connector.fetch_sensor(sensor_id)
+            if ret_db:
+                # add to tmp
+                # -------------------
+                # sensor_id TEXT PRIMARY KEY,
+                # info TEXT,
+                # sensor_type TEXT,
+                # firmware_version TEXT,
+                # installation_date TIMESTAMP,
+                # location_id TEXT,
+                # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                # updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                # FOREIGN KEY (location_id) REFERENCES location_table(location_id)
 
-    def clear(self):
-        self.device_dict = {}
-        self.save()
-
+                self.tmp_sensor_data_dict[sensor_id] = {
+                    "id": ret_db[0],
+                    "info": ret_db[1],
+                    "sensor_type": ret_db[2],
+                    "firmware_version": ret_db[3],
+                    "installation_date": ret_db[4],
+                    "location_id": ret_db[5],
+                    "created_at": ret_db[6],
+                    "updated_at": ret_db[7],
+                }
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Failed to fetch sensor data: {e}")
+            return False
+                    
+            
+            
 
 # singleton instance
 __instance = None

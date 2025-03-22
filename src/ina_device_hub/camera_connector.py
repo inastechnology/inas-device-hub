@@ -28,8 +28,8 @@ class CameraConnector:
 
             return img_bytes  # バイト列として画像データが返される
         except ffmpeg.Error as e:
-            print("エラーが発生しました:")
-            print(e.stderr.decode())
+            logger.error("エラーが発生しました:"
+                         f"{e.stderr.decode()}")
             return None
 
     def stream_rtsp(self, device_id: str):
@@ -133,4 +133,4 @@ if __name__ == "__main__":
         with open("image.jpg", "wb") as f:
             f.write(img_bytes)
     else:
-        print("Failed to take picture")
+        logger.error("Failed to take picture")

@@ -19,26 +19,26 @@ class SensorImageRepogitory:
 
         self.storage_connector = storage_connector()
 
-    def save(self, device_id, imageBytes):
+    def save(self, sensor_id, imageBytes):
         # save image to cloud storage
         image_path = self.storage_connector.save_to_cloud(
-            device_id, imageBytes, "image/jpeg"
+            sensor_id, imageBytes, "image/jpeg"
         )
 
         # insert image path to database
         yyyymmddhhmmss = time.strftime("%Y%m%d%H%M%S", time.gmtime())
         self.db_connector.insert_sensor_image_data(
-            device_id, yyyymmddhhmmss, image_path
+            sensor_id, yyyymmddhhmmss, image_path
         )
 
-    def fetch_latest(self, device_id: str, limit: int = 1):
-        sensor_images = self.db_connector.fetch_sensor_latest_image(device_id, limit)
+    def fetch_latest(self, sensor_id: str, limit: int = 1):
+        sensor_images = self.db_connector.fetch_sensor_latest_image(sensor_id, limit)
         sensor_images_as_dict = []
         for sensor_image in sensor_images:
-            device_id, yyyymmddhhmmss, image_path, created_at = sensor_image
+            sensor_id, yyyymmddhhmmss, image_path, created_at = sensor_image
             sensor_images_as_dict.append(
                 {
-                    "device_id": device_id,
+                    "sensor_id": sensor_id,
                     "yyyymmddhhmmss": yyyymmddhhmmss,
                     "image_path": image_path,
                     "created_at": datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
@@ -49,13 +49,13 @@ class SensorImageRepogitory:
             )
         return sensor_images_as_dict
 
-    def get_image_dir(self, device_id):
+    def get_image_dir(self, sensor_id):
         yyyymmdd = time.strftime("%Y%m%d", time.gmtime())
-        return os.path.join(setting().get("tenant_id"), device_id, yyyymmdd)
+        return os.path.join(setting().get("tenant_id"), sensor_id, yyyymmdd)
 
-    def get_image_path(self, device_id):
+    def get_image_path(self, sensor_id):
         return os.path.join(
-            self.get_image_dir(device_id),
+            self.get_image_dir(sensor_id),
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()) + ".jpg",
         )
 

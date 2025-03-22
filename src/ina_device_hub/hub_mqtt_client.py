@@ -54,13 +54,13 @@ class HubMQTTClient:
             )
             print(f"Received `{omitted_payload}` from `{msg.topic}` topic")
             topic_parts = msg.topic.split("/")
-            device_id = topic_parts[1] if len(topic_parts) > 1 else None
+            sensor_id = topic_parts[1] if len(topic_parts) > 1 else None
             kind = topic_parts[2] if len(topic_parts) > 2 else None
             seqId = topic_parts[3] if len(topic_parts) > 3 else None
-            if device_id is not None and kind is not None:
+            if sensor_id is not None and kind is not None:
                 self.subscribed_data_queue.put(
                     {
-                        "device_id": device_id,
+                        "sensor_id": sensor_id,
                         "kind": kind,
                         "payload": msg.payload,
                         "seqId": seqId,

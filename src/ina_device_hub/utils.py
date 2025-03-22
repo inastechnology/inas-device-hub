@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 class Utils:
     @staticmethod
-    def create_latest_aggregated_graph_as_html(device_id, latest_aggregated_data):
+    def create_latest_aggregated_graph_as_html(sensor_id, latest_aggregated_data):
         if latest_aggregated_data is None:
             return None
 
@@ -25,7 +25,7 @@ class Utils:
                 tds_y.append(data["tds"])
 
         fig = make_subplots(rows=1, cols=2)
-        fig.update_layout(title=f"{device_id} latest aggregated data")
+        fig.update_layout(title=f"{sensor_id} latest aggregated data")
 
         # temp
         temp = go.Scatter(x=temp_x, y=temp_y, mode="lines+markers", name="temp")

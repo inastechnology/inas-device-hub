@@ -1,6 +1,7 @@
 import os
 import time
 import boto3
+import json
 from datetime import datetime, timezone, timedelta
 
 from ina_device_hub.setting import setting
@@ -26,7 +27,19 @@ class StorageConnector:
     def __init__(self):
         if not os.path.exists(self.LOCAL_STORAGE_BASE_DIR):
             os.makedirs(self.LOCAL_STORAGE_BASE_DIR)
-
+            
+        self.cache_table_dir = os.path.join(setting().get_work_dir(), ".storage.cache")
+        self.cache_table = {}
+        if not os.path.exists(self.cache_table_dir):
+            os.makedirs(self.cache_table_dir)
+        self.cache_table_path = os.path.join(self.cache_table_dir, "cache_table.json")
+        if os.path.exists(self.cache_table_path):
+            with open(self.cache_table_path, "r") as f:
+                self.cache_table = json.load(f)
+        else:
+            with open(self.cache_table_path, "w") as f:
+                json.dump(self.cache_table, f)
+                
         self.s3 = boto3.client(
             "s3",
             endpoint_url=setting().get("storage_bucket").get("endpoint_url"),
@@ -52,7 +65,7 @@ class StorageConnector:
             )
             logger.info(f"Image uploaded to {file_path}({len(fileBytes)} bytes)")
         except Exception as e:
-            print(f"Error: {e}")
+            logger.exception(f"Error: {e}")
             return None
         return file_path
 
@@ -78,21 +91,32 @@ class StorageConnector:
             )
             return response["Body"].read()
         except Exception as e:
-            print(f"Error: {e}")
+            logger.exception(f"Error: {e}")
             return None
 
-    def fetch_files(self, prefix, date=None, limit=1):
+    def fetch_files(self, prefix, date=None, limit=1, cache=True):
+        """
+        Fetches the files from cloud storage.
+        Automatically generates the prefix based on the file key and the date.
+        e.g.) prefix: {tenant_id}/{file_key}/{yyyymmdd}
+        """
         try:
             images = []
             response = self.s3.list_objects_v2(
                 Bucket=setting().get("storage_bucket").get("bucket_name"),
                 Prefix=self.get_prefix(prefix, date),
+                MaxKeys=limit,
             )
-            print(response)
             for content in response.get("Contents", []):
                 try:
+                    cache_item = self.cache_table.get(content.get("Key"))
+                    if cache_item and int(cache_item.get("expire_in",0)) > int(datetime.now(timezone.utc).timestamp()):
+                        logger.info(f"Cache hit: {content.get('Key')}")
+                        images.append(self.cache_table.get(content.get("Key")))
+                        continue
+                    
                     presigned_url = self.get_presigned_url(content.get("Key"))
-                    print(presigned_url)
+                    logger.info(presigned_url)
                     images.append(
                         {
                             "key": content.get("Key"),
@@ -100,12 +124,20 @@ class StorageConnector:
                             "presigned_url": presigned_url,
                         }
                     )
+                    # register cache table
+                    if cache:
+                        self.cache_table[content.get("Key")] = {
+                            "key": content.get("Key"),
+                            "last_modified": content.get("LastModified").isoformat(),
+                            "presigned_url": presigned_url,
+                            "expire_in": int(datetime.now(timezone.utc).timestamp() + 24 * 60 * 60),
+                        }
                 except Exception as e:
-                    print(f"Error: {e}")
+                    logger.exception(f"Error: {e}")
             images.sort(key=lambda x: x.get("last_modified"), reverse=True)
-            return images[:limit]
+            return images
         except Exception as e:
-            print(f"Error: {e}")
+            logger.exception(f"Error: {e}")
             return None
         
     def get_presigned_url(self, file_full_key):
@@ -113,11 +145,11 @@ class StorageConnector:
             ret = self.s3.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": setting().get("storage_bucket").get("bucket_name"), "Key": file_full_key},
-                ExpiresIn=3600,
+                ExpiresIn=24 * 60 * 60,
             )
             return ret
         except Exception as e:
-            print(f"Error: {e}")
+            logger.exception(f"Error: {e}")
             return None
 
     def get_file_dir(self, file_key):
