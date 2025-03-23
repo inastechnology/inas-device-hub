@@ -156,7 +156,7 @@ class SensorDataRepository:
         temps = []
         tdss = []
         light_status_list = []
-        light_status_average = 0
+        light_status_point = 0
 
         data = self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
 
@@ -176,16 +176,16 @@ class SensorDataRepository:
                         if "status" in light_status and "confidence" in light_status:
                             light_status_list.append(light_status)
                             if light_status["status"]:
-                                light_status_average += light_status["confidence"]
+                                light_status_point += light_status["confidence"]
                             else:
-                                light_status_average -= light_status["confidence"]
+                                light_status_point -= light_status["confidence"]
                 except Exception as e:
                     logger.exception(f"Failed to aggregate light status: {e}:{elem['extra']}")
 
         avg_temp = sum(temps) / len(temps) if len(temps) > 0 else -1000
         avg_tds = sum(tdss) / len(tdss) if len(tdss) > 0 else -1000
-        led_status = True if light_status_average > 0 else False
-        print(f"led_status: {led_status}, light_status_average: {light_status_average}")
+        led_status = True if light_status_point > 0 else False
+        print(f"led_status: {led_status}, light_status_point: {light_status_point}")
         print(f"detailed light status: {light_status_list}")
         # construct extra
         extra = {
