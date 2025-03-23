@@ -1,10 +1,10 @@
 # sensor data repository
 
-from datetime import datetime, timezone, timedelta, UTC
 import json
+from datetime import UTC, datetime, timedelta, timezone
 
-from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.general_log import logger
+from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.setting import setting
 
 
@@ -155,19 +155,49 @@ class SensorDataRepository:
         # aggregate
         temps = []
         tdss = []
+        light_status_list = []
+        light_status_average = 0
 
-        for data in self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]:
-            if "temp" in data and data["temp"] != -1000:
-                temps.append(data["temp"])
-            if "tds" in data and data["tds"] != -1000:
-                tdss.append(data["tds"])
+        data = self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
+
+        for elem in data:
+            if "temp" in elem and elem["temp"] != -1000:
+                temps.append(elem["temp"])
+            if "tds" in elem and elem["tds"] != -1000:
+                tdss.append(elem["tds"])
+
+            if "extra" in elem:
+                try:
+                    # status =false を負として confidence を加重平均
+                    # 結果が正の場合は light=on
+                    # 結果が負の場合は light=off
+                    if "light_status" in elem["extra"]:
+                        light_status = elem["extra"]["light_status"]
+                        if "status" in light_status and "confidence" in light_status:
+                            light_status_list.append(light_status)
+                            if light_status["status"]:
+                                light_status_average += light_status["confidence"]
+                            else:
+                                light_status_average -= light_status["confidence"]
+                except Exception as e:
+                    logger.exception(f"Failed to aggregate light status: {e}:{elem['extra']}")
 
         avg_temp = sum(temps) / len(temps) if len(temps) > 0 else -1000
         avg_tds = sum(tdss) / len(tdss) if len(tdss) > 0 else -1000
+        led_status = True if light_status_average > 0 else False
+        print(f"led_status: {led_status}, light_status_average: {light_status_average}")
+        print(f"detailed light status: {light_status_list}")
+        # construct extra
+        extra = {
+            "light_status": {
+                "status": led_status,
+            }
+        }
 
         return {
             "temp": avg_temp,
             "tds": avg_tds,
+            "extra": extra,
         }
 
     def __insert_latest_data(self, sensor_id: str, data: dict):
