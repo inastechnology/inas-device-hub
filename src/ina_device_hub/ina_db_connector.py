@@ -317,7 +317,7 @@ class InaDBConnector:
         """
         return self.conn.execute("SELECT * FROM location_info").fetchall()
 
-    def upsert_evaluation_result(self, location_id: str, input_data: str, output_data: str):
+    def upsert_evaluation_result(self, location_id: str, input_data: str, output_data: str, summary: str = ""):
         """
         評価結果を登録／更新します。
         INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
@@ -331,13 +331,25 @@ class InaDBConnector:
         FOREIGN KEY (location_id) REFERENCES location_table(location_id)
         """
         if location_id is None:
-            query = "INSERT INTO ai_agent_evaluation (input_data, output_data) VALUES (?, ?)"
-            param = (input_data, output_data)
+            query = "INSERT INTO ai_agent_evaluation (input_data, output_data, summary) VALUES (?, ?, ?)"
+            param = (input_data, output_data, summary)
         else:
-            query = "INSERT INTO ai_agent_evaluation (location_id, input_data, output_data) VALUES (?, ?, ?)"
-            param = (location_id, input_data, output_data)
+            query = "INSERT INTO ai_agent_evaluation (location_id, input_data, output_data, summary) VALUES (?, ?, ?, ?)"
+            param = (location_id, input_data, output_data, summary)
 
         self.conn.execute(query, param)
+
+    def fetch_latest_evaluation_result(self, location_id: str, limit: int = 1):
+        """
+        最新評価結果を取得します。
+        """
+        if location_id is None:
+            query = f"SELECT * FROM ai_agent_evaluation ORDER BY created_at DESC LIMIT {limit}"
+            param = ()
+        else:
+            query = f"SELECT * FROM ai_agent_evaluation WHERE location_id = ? ORDER BY created_at DESC LIMIT {limit}"
+            param = (location_id,)
+        return self.conn.execute(query, param).fetchone()
 
 
 __instance = None
