@@ -242,7 +242,7 @@ OUTPUT:
 
         # evaluate summary
         message = f"""
-        Please evaluate the summary of the location {location_id} with the following data.(please output language:{setting().get("language")})
+        Please evaluate the summary of the location {location_id} with the following data.)
         Input data:
         {evaluate_result}
         """
@@ -273,3 +273,4 @@ if __name__ == "__main__":
     agent = InaAgent()
     yesterday = datetime.now(UTC) - timedelta(days=1)
     agent.routine()
+    agent.ina_db_connector.conn.sync()

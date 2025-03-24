@@ -16,7 +16,7 @@ from ina_device_hub.setting import setting
 
 def turso_db_commit(func):
     """
-    関数実行後、必ず commit と sync を実行するデコレーター
+    関数実行後、必ず commit を実行するデコレーター
     """
 
     def wrapper(self, *args, **kwargs):
@@ -76,6 +76,7 @@ class InaDBConnector:
         """
         return self.conn.execute("SELECT * FROM location_table").fetchall()
 
+    @turso_db_commit
     def upsert_location(self, location_id: str, info: dict):
         # location_id TEXT PRIMARY KEY,
         # name TEXT,
@@ -126,6 +127,7 @@ class InaDBConnector:
         """
         return self.conn.execute("SELECT * FROM sensor_info WHERE sensor_id = ?", (sensor_id,)).fetchone()
 
+    @turso_db_commit
     def upsert_sensor(self, sensor_id: str, info: dict):
         """
         センサーデバイス情報を登録／更新します。
@@ -277,6 +279,7 @@ class InaDBConnector:
 
         return self.conn.execute(query, param).fetchall()
 
+    @turso_db_commit
     def insert_camera_info(self, camera_id: str, location_id: str = None):
         """
         カメラデバイス情報を登録します。
@@ -286,6 +289,7 @@ class InaDBConnector:
             (camera_id, location_id),
         )
 
+    @turso_db_commit
     def upsert_camera_device(self, camera_id: str, info: dict):
         """
         カメラデバイス情報を登録／更新します。
@@ -317,6 +321,7 @@ class InaDBConnector:
         """
         return self.conn.execute("SELECT * FROM location_info").fetchall()
 
+    @turso_db_commit
     def upsert_evaluation_result(self, location_id: str, input_data: str, output_data: str, summary: str = ""):
         """
         評価結果を登録／更新します。

@@ -27,23 +27,24 @@ class ImageUtils:
         pink_purple_hue_max: int = 170,
         pink_purple_saturation_min: int = 60,
         pink_purple_value_min: int = 60,
-        pink_purple_ratio_thresh: float = 0.8,  # 80%以上が該当なら全体飽和
+        # 変更: 0.8 → 0.9 にして飽和判定をやや緩く
+        pink_purple_ratio_thresh: float = 0.99,
         # --- 色多様性（色偏り）判定のパラメータ ---
-        color_bias_hue_std_thresh: float = 15,  # Hueの標準偏差がこれ未満なら色偏りと判定
+        # 変更: 15 → 10 にして色偏り判定をやや緩く
+        color_bias_hue_std_thresh: float = 10,
     ) -> tuple[bool, float]:
         """
         植物育成用LEDの点灯状態を、以下の要素から判定します。
 
-        1. 全体がピンク・紫で飽和している場合は、誤検出防止のため False を返す。
-        2. 画像全体の色分布（Hueの標準偏差）が低い（偏っている）場合も、LED非照射と判定する。
+        1. 全体がピンク・紫で飽和している場合は誤検出防止のため False を返す。
+           (pink_purple_ratio_thresh 以上なら飽和とみなす)
+        2. 画像全体の色分布（Hueの標準偏差）が低い（color_bias_hue_std_thresh未満）場合は
+           色偏りが強いとみなし、LED非照射と判定する。
         3. グレースケールによる高輝度の点光源検出
         4. アルミホイル上での大きな明る領域（反射）の検出
         5. カラー(HSV)判定
 
-        Returns:
-            (is_on, confidence):
-                is_on (bool): LEDが点灯しているかどうか
-                confidence (float): 0.0〜1.0で表す信頼度
+        これらを総合してLED点灯 (True/False) と信頼度を返す。
         """
         import cv2
         import numpy as np
@@ -67,17 +68,17 @@ class ImageUtils:
         pink_purple_pixels = np.count_nonzero(pink_purple_mask)
         pink_purple_ratio = pink_purple_pixels / total_pixels
         if pink_purple_ratio > pink_purple_ratio_thresh:
-            # 全体がピンク・紫で飽和している場合は誤検出防止のため False
+            # 全体がピンク・紫で飽和しているとみなす
             return False, 0.0
 
         # ===================================================
         # (B) 色多様性（色偏り）の判定
         # ===================================================
-        # Hueチャンネルの標準偏差が低いと、画像全体が一色に偏っていると判断
+        # Hueチャンネルの標準偏差が低いほど一色に偏っている
         hue_channel = hsv[:, :, 0].astype(np.float32)
         hue_std = np.std(hue_channel)
         if hue_std < color_bias_hue_std_thresh:
-            # 色の多様性が低い（色偏りが強い）場合は LED 非照射と判断
+            # 色の多様性が低い（色偏りが強い）とみなす
             return False, 0.0
 
         # ===================================================
@@ -103,6 +104,8 @@ class ImageUtils:
         # ===================================================
         # (2) アルミホイル反射の検出
         # ===================================================
+        # 画像全体に対して最大明る領域の割合が一定以上であれば反射とみなし、
+        # LEDが点灯している可能性を高める材料とする。
         foil_reflection_detected = (max_area / total_pixels) > foil_reflection_area_thresh
 
         # ===================================================
@@ -118,8 +121,9 @@ class ImageUtils:
 
         # ===================================================
         # (4) 統合判定
-        # LED照射の場合は、グレースケール判定、カラー判定、またはアルミホイル反射のいずれかが検出される
         # ===================================================
+        # グレースケール or カラー or アルミホイル反射のいずれかが
+        # LED点灯を示していればTrue
         is_on = is_on_gray or is_on_color or foil_reflection_detected
 
         # ===================================================
@@ -132,6 +136,7 @@ class ImageUtils:
             raw_conf += color_ratio / (color_ratio_thresh * 2)
         if foil_reflection_detected:
             raw_conf += (max_area / total_pixels) / (foil_reflection_area_thresh * 2)
+
         confidence = max(0.0, min(raw_conf, 1.0))
 
         return is_on, round(confidence, 3)

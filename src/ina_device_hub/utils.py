@@ -25,7 +25,7 @@ class Utils:
                 tds_y.append(data["tds"])
 
         fig = make_subplots(rows=1, cols=2)
-        fig.update_layout(title=f"{sensor_id} latest aggregated data")
+        fig.update_layout(title="Latest Sensor Data")
 
         # temp
         temp = go.Scatter(x=temp_x, y=temp_y, mode="lines+markers", name="temp")
@@ -37,6 +37,6 @@ class Utils:
         fig.add_trace(tds, row=1, col=2)
 
         # add layout h:480px
-        fig.update_layout(height=480)
+        fig.update_layout(height=480, template="plotly_white")
 
         return plot(fig, output_type="div")

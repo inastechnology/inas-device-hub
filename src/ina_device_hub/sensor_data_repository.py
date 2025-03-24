@@ -139,7 +139,7 @@ class SensorDataRepository:
         self.light_status_dict[location_id] = {
             "status": status,
             "confidence": confidence,
-            "updated_at": datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
         }
 
     def __aggregate_data(self, sensor_id, yyyymmdd_hh):
