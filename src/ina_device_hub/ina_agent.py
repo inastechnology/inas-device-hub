@@ -177,31 +177,33 @@ Objective:
         image_dict = self.camera_image_repository.get_date_image_by_location(date_filter, location_id=location_id)
 
         # choose one image
+        # TODO: choose the best image
         target_img = None
         for sensor_id, images in image_dict.items():
             if images:
                 target_img = images[0]
                 break
 
-        if target_img is None:
-            raise Exception("No image found")
+        if target_img is not None:
+            logger.info(f"Target image found: {target_img}")
+            # download image
+            target_img_as_bytes = self.camera_image_repository.download_image(target_img["key"])
 
-        # download image
-        target_img_as_bytes = self.camera_image_repository.download_image(target_img["key"])
+            # save as test
+            with open(os.path.join(setting().get_work_dir(), "evaluate.jpg"), "wb") as f:
+                f.write(target_img_as_bytes)
 
-        # save as test
-        with open(os.path.join(setting().get_work_dir(), "evaluate.jpg"), "wb") as f:
-            f.write(target_img_as_bytes)
-
-        describe_result = self.ai_connector.analyze_image(
-            target_img_as_bytes,
-            system_prompt=self.image_analyze_system_prompt,
-            max_tokens=512,
-        )
-        if describe_result is None:
-            raise Exception("Failed to analyze image by AI")
-        print(describe_result)
-        __input_data["image"] = describe_result
+            describe_result = self.ai_connector.analyze_image(
+                target_img_as_bytes,
+                system_prompt=self.image_analyze_system_prompt,
+                max_tokens=512,
+            )
+            if describe_result is None:
+                raise Exception("Failed to analyze image by AI")
+            print(describe_result)
+            __input_data["image"] = describe_result
+        else:
+            logger.info("No target image found")
 
         # fetch previous evaluation summary
         previous_evaluation = self.ina_db_connector.fetch_latest_evaluation_result(location_id)
