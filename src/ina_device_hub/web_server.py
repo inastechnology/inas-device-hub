@@ -14,6 +14,7 @@ from flask import (
 from ina_device_hub.camera_connector import camera_connector
 from ina_device_hub.camera_device_repository import camera_device_repository
 from ina_device_hub.camera_image_repository import camera_image_repository
+from ina_device_hub.i18n import i18n
 from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.location_repository import location_repository
 from ina_device_hub.sensor_data_repository import sensor_data_repository
@@ -270,6 +271,7 @@ def get_location_detail(location_id):
     return render_template(
         "location_dashboard.html",
         language=setting().get("language"),
+        dictionary=i18n().get_dictionary(),
         location_id=location_id,
         info=location_info,
         sensors=sensors,

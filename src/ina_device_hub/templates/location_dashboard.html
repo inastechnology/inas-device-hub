@@ -32,7 +32,7 @@
                         <h5 class="card-title">{{ sensor.name }}</h5>
                         <h6 class="card-subtitle mb-2 text-muted">Latest Data ({{ sensor.latest.created_at }})</h6>
                         <ul class="list-group list-group-flush mb-3">
-                            <li class="list-group-item">Temp: {{ sensor.latest.temp }}</li>
+                            <li class="list-group-item">{{dictionary.temp}}: {{ sensor.latest.temp }}</li>
                             <li class="list-group-item">TDS: {{ sensor.latest.tds }}</li>
                         </ul>
                         <div>{{ sensor.graph | safe }}</div>
@@ -50,19 +50,19 @@
                     <div class="card-body">
                         <h5 class="card-title">{{ camera.name }}</h5>
                         <ul class="list-group list-group-flush">
-                            <li class="list-group-item">Location: {{ camera.location_id }}</li>
-                            <li class="list-group-item">Type: {{ camera.type }}</li>
-                            <li class="list-group-item">Timelapse: {{ camera.timelapse }}</li>
-                            <li class="list-group-item">IP Address: {{ camera.ip_address }}</li>
-                            <li class="list-group-item">Username: {{ camera.username }}</li>
-                            <li class="list-group-item">Password: REDACTED</li>
+                            <li class="list-group-item">{{dictionary.location}}: {{ camera.location_id }}</li>
+                            <li class="list-group-item">{{dictionary.type}}: {{ camera.type }}</li>
+                            <li class="list-group-item">{{dictionary.is_timelapsed}}: {{ camera.timelapse }}</li>
+                            <li class="list-group-item">{{dictionary.ip_address}}: {{ camera.ip_address }}</li>
+                            <li class="list-group-item">{{dictionary.username}}: {{ camera.username }}</li>
+                            <li class="list-group-item">{{dictionary.password}}: REDACTED</li>
                         </ul>
                     </div>
                     {% if camera_latest_images[camera.id]|length > 1 %}
                     <img src="{{ camera_latest_images[camera.id][-1].presigned_url }}" class="card-img-bottom img-fluid"
                         alt="latest image">
                     <div class="p-3">
-                        <h6>Timelapse GIF</h6>
+                        <h6>{{dictionary.timelapsed}}</h6>
                         <canvas id="canvas-{{ camera.id }}" style="display:none;"></canvas>
                         <img id="result-gif-{{ camera.id }}" class="img-fluid rounded shadow">
                         <!-- プログレスバー（初期は非表示） -->
@@ -74,7 +74,7 @@
                         </div>
                     </div>
                     {% else %}
-                    <div class="card-footer text-muted text-center">No images available</div>
+                    <div class="card-footer text-muted text-center">{{dictionary.no_image}}</div>
                     {% endif %}
                 </div>
             </div>
@@ -82,13 +82,13 @@
         </div>
 
         <!-- 評価表示 -->
-        <h3 class="mb-3">Latest Evaluation Results ({{ evaluated_markdown_created_at }})</h3>
+        <h3 class="mb-3">{{dictionary.report_of_crop_growth}} ({{ evaluated_markdown_created_at }})</h3>
         <div class="card shadow-sm">
             <div class="card-body position-relative">
                 <div id="evaluation-results" class="markdown-content collapsed"></div>
                 <div id="fade-overlay" class="fade-overlay"></div>
                 <div class="text-end mt-2">
-                    <button id="toggle-btn" class="btn btn-sm btn-outline-primary">続きを見る</button>
+                    <button id="toggle-btn" class="btn btn-sm btn-outline-primary">{{dictionary.read_more}}</button>
                 </div>
             </div>
         </div>
@@ -148,7 +148,7 @@
 
         toggleBtn.addEventListener('click', () => {
             content.classList.toggle('expanded');
-            toggleBtn.textContent = content.classList.contains('expanded') ? '閉じる' : '続きを見る';
+            toggleBtn.textContent = content.classList.contains('expanded') ? '{{dictionary.close}}' : '{{dictionary.read_more}}';
         });
         // GIF 生成（カメラごと）
         const cameraImageMap = {{ camera_latest_images | tojson }};
