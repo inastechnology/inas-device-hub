@@ -22,16 +22,9 @@ class ImageUtils:
             (35, 60, 60, 85, 255, 255),  # 緑系
         ),
         color_ratio_thresh: float = 0.01,  # マスク領域が画像全体の1%超なら点灯とみなす
-        # --- 全体的なピンク・紫の飽和状態を除外するパラメータ ---
-        pink_purple_hue_min: int = 130,
-        pink_purple_hue_max: int = 170,
-        pink_purple_saturation_min: int = 60,
-        pink_purple_value_min: int = 60,
-        # 変更: 0.8 → 0.9 にして飽和判定をやや緩く
-        pink_purple_ratio_thresh: float = 0.99,
         # --- 色多様性（色偏り）判定のパラメータ ---
         # 変更: 15 → 10 にして色偏り判定をやや緩く
-        color_bias_hue_std_thresh: float = 10,
+        color_bias_hue_std_thresh: float = 4,
     ) -> tuple[bool, float]:
         """
         植物育成用LEDの点灯状態を、以下の要素から判定します。
@@ -61,20 +54,10 @@ class ImageUtils:
         total_pixels = height * width
 
         # ===================================================
-        # (A) 全体がピンク・紫で飽和しているかの判定
-        # ===================================================
-        hsv = cv2.cvtColor(img_blurred, cv2.COLOR_BGR2HSV)
-        pink_purple_mask = cv2.inRange(hsv, (pink_purple_hue_min, pink_purple_saturation_min, pink_purple_value_min), (pink_purple_hue_max, 255, 255))
-        pink_purple_pixels = np.count_nonzero(pink_purple_mask)
-        pink_purple_ratio = pink_purple_pixels / total_pixels
-        if pink_purple_ratio > pink_purple_ratio_thresh:
-            # 全体がピンク・紫で飽和しているとみなす
-            return False, 0.0
-
-        # ===================================================
         # (B) 色多様性（色偏り）の判定
         # ===================================================
         # Hueチャンネルの標準偏差が低いほど一色に偏っている
+        hsv = cv2.cvtColor(img_blurred, cv2.COLOR_BGR2HSV)
         hue_channel = hsv[:, :, 0].astype(np.float32)
         hue_std = np.std(hue_channel)
         if hue_std < color_bias_hue_std_thresh:
@@ -153,6 +136,8 @@ if __name__ == "__main__":
     # is directory
     if os.path.isdir(arg_img_pathe):
         img_pathes = [os.path.join(arg_img_pathe, f) for f in os.listdir(arg_img_pathe)]
+        # sort filename
+        img_pathes.sort()
     else:
         img_pathes = [arg_img_pathe]
 
