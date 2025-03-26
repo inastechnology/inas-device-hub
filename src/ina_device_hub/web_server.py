@@ -250,6 +250,8 @@ def get_location_detail(location_id):
             date_filter = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y%m%d")
             yesterday_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=max_image_len - len(today_images))
             camera_latest_images[camera["id"]].extend(yesterday_images)
+            # sort as key
+            camera_latest_images[camera["id"]].sort(key=lambda x: x.get("key"))
 
     # 直近のAI Agentの評価結果を取得
     # evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -36,5 +36,6 @@ dictionary = {
     "no_image": "No Image",
     "read_more": "Read More",
     "close": "Close",
+    "date": "Date",
     "report_of_crop_growth": "Report of crop growth",
 }
