@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from flask import (
     Flask,
@@ -237,90 +237,46 @@ def get_location_detail(location_id):
         # 'location_id': None, 'type': 'INACD', 'timelapse': True,
         # 'ip_address': '192.168.xxx.xxx', 'username': '',
         # 'password': '[REDACTED]'}
+        max_image_len = 6 * 24
+        camera_latest_images[camera["id"]] = []
         date_filter = datetime.now(UTC).strftime("%Y%m%d")
-        today_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=6 * 24)
+        today_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=max_image_len)
 
-        camera_latest_images[camera["id"]] = today_images[0] if today_images else None
+        camera_latest_images[camera["id"]] = today_images
 
+        if len(today_images) < max_image_len:
+            # 昨日の画像を取得
+            date_filter = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y%m%d")
+            yesterday_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=max_image_len - len(today_images))
+            camera_latest_images[camera["id"]].extend(yesterday_images)
+
+    # 直近のAI Agentの評価結果を取得
+    # evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    # location_id TEXT,
+    # input_data TEXT,
+    # output_data TEXT,
+    # summary TEXT,
+    # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    evaluation_results = ina_db_connector().fetch_latest_evaluation_result(location_id, limit=1)
+    evaluated_markdown = evaluation_results[3] if evaluation_results else "**No evaluation results**"
+    evaluated_markdown_created_at = evaluation_results[5] if evaluation_results else ""
+    if evaluated_markdown_created_at:
+        evaluated_markdown_created_at = (
+            datetime.strptime(evaluated_markdown_created_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        )
     if location_id is None:
         location_id = "public"
-    template = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>INA Device Hub</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
 
-<div class="container py-4">
-    <div class="mb-4 text-center">
-        <h1 class="display-5">INA Device Hub</h1>
-        <h2 class="text-secondary">{{ location_id }}</h2>
-    </div>
-
-    <div class="card mb-4 shadow-sm">
-        <div class="card-body">
-            <h4 class="card-title">{{ info.name }}</h4>
-            <p class="card-text">{{ info.description }}</p>
-        </div>
-    </div>
-
-    <h3 class="mb-3">Sensors</h3>
-    <div class="row">
-        {% for sensor in sensors %}
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">{{ sensor.name }}</h5>
-                    <h6 class="card-subtitle mb-2 text-muted">Latest Data</h6>
-                    <ul class="list-group list-group-flush mb-3">
-                        <li class="list-group-item">Temp: {{ sensor.latest.temp }}</li>
-                        <li class="list-group-item">TDS: {{ sensor.latest.tds }}</li>
-                    </ul>
-                    <div>{{ sensor.graph | safe }}</div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <h3 class="mb-3">Cameras</h3>
-    <div class="row">
-        {% for camera in cameras %}
-        <div class="col-md-6 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h5 class="card-title">{{ camera.name }}</h5>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">Location: {{ camera.location_id }}</li>
-                        <li class="list-group-item">Type: {{ camera.type }}</li>
-                        <li class="list-group-item">Timelapse: {{ camera.timelapse }}</li>
-                        <li class="list-group-item">IP Address: {{ camera.ip_address }}</li>
-                        <li class="list-group-item">Username: {{ camera.username }}</li>
-                        <li class="list-group-item">Password: REDACTED</li>
-                    </ul>
-                </div>
-                <img src="{{ camera_latest_images[camera.id].presigned_url }}" class="card-img-bottom img-fluid" alt="latest image">
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="text-center mt-4">
-        <a href="/locations" class="btn btn-secondary">Back</a>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-    """
-
-    return render_template_string(
-        template, location_id=location_id, info=location_info, sensors=sensors, cameras=cameras, camera_latest_images=camera_latest_images
+    return render_template(
+        "location_dashboard.html",
+        language=setting().get("language"),
+        location_id=location_id,
+        info=location_info,
+        sensors=sensors,
+        cameras=cameras,
+        camera_latest_images=camera_latest_images,
+        evaluated_markdown=evaluated_markdown,
+        evaluated_markdown_created_at=evaluated_markdown_created_at,
     )
 
 

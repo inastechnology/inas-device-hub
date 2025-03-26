@@ -134,7 +134,7 @@ class StorageConnector:
                         }
                 except Exception as e:
                     logger.exception(f"Error: {e}")
-            images.sort(key=lambda x: x.get("last_modified"), reverse=True)
+            images.sort(key=lambda x: x.get("key"))
             return images
         except Exception as e:
             logger.exception(f"Error: {e}")
