@@ -1,100 +1,8 @@
 import json
 import os
 import uuid
-from dotenv import load_dotenv
-import sys
 
-load_dotenv()
-
-# device name
-try:
-    DEVICE_NAME = os.environ["HOSTNAME"]
-except KeyError:
-    DEVICE_NAME = "ina-device-hub"
-
-# work directory
-try:
-    WORK_DIR = os.environ["WORK_DIR"]
-    WORK_DIR = os.path.expanduser(WORK_DIR)
-except KeyError:
-    WORK_DIR = os.path.expanduser("~/.ina-device-hub")
-
-if not os.path.exists(WORK_DIR):
-    os.makedirs(WORK_DIR)
-
-# Turso settings
-try:
-    TURSO_DATABASE_URL = os.environ["TURSO_DATABASE_URL"]
-    TURSO_AUTH_TOKEN = os.environ["TURSO_AUTH_TOKEN"]
-    TURSO_SYNC_INTERVAL = int(os.environ["TURSO_SYNC_INTERVAL"])
-except KeyError as e:
-    exit(f"Please set {e} in .env file")
-
-try:
-    LOCAL_STORAGE_BASE_DIR = os.environ["LOCAL_STORAGE_BASE_DIR"]
-except KeyError:
-    LOCAL_STORAGE_BASE_DIR = "./.data/storage"
-
-if not os.path.exists(LOCAL_STORAGE_BASE_DIR):
-    os.makedirs(LOCAL_STORAGE_BASE_DIR)
-
-try:
-    S3_ENDPOINT_URL = os.environ["S3_ENDPOINT_URL"]
-    S3_BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
-    S3_BUCKET_REGION = os.environ["S3_BUCKET_REGION"]
-    S3_ACCESS_KEY = os.environ["S3_ACCESS_KEY"]
-    S3_SECRET_KEY = os.environ["S3_SECRET_KEY"]
-except KeyError as e:
-    exit(f"Please set {e} in .env file")
-
-# MQTT settings
-try:
-    MQTT_BROKER_URL = os.environ["MQTT_BROKER_URL"]
-    MQTT_BROKER_PORT = int(os.environ["MQTT_BROKER_PORT"])
-    MQTT_BROKER_USERNAME = os.environ["MQTT_BROKER_USERNAME"]
-    MQTT_BROKER_PASSWORD = os.environ["MQTT_BROKER_PASSWORD"]
-except KeyError as e:
-    exit(f"Please set {e} in .env file")
-
-# sensor settings
-try:
-    SENSOR_SAVE_IMAGE = bool("true" == os.environ["SENSOR_SAVE_IMAGE"].lower())
-    SENSOR_SAVE_AUDIO = bool("true" == os.environ["SENSOR_SAVE_AUDIO"].lower())
-except KeyError:
-    SENSOR_SAVE_IMAGE = False
-    SENSOR_SAVE_AUDIO = False
-
-# AI settings
-try:
-    AI_ENABLED = bool("true" == os.environ["AI_ENABLED"].lower())
-except KeyError:
-    AI_ENABLED = False
-
-try:
-    AI_AGENT_SCHEDULE_START = os.environ.get("AI_AGENT_SCHEDULE_START", "09:30")
-    AI_IMAGE_ANALYZE_API_KEY = os.environ.get("AI_IMAGE_ANALYZE_API_KEY", None)
-    AI_IMAGE_ANALYZE_BASE_URL = os.environ.get("AI_IMAGE_ANALYZE_BASE_URL", None)
-    AI_IMAGE_ANALYZE_MODEL = os.environ.get("AI_IMAGE_ANALYZE_MODEL", None)
-
-    AI_TEXT_ANALYZE_API_KEY = os.environ.get("AI_TEXT_ANALYZE_API_KEY", None)
-    AI_TEXT_ANALYZE_BASE_URL = os.environ.get("AI_TEXT_ANALYZE_BASE_URL", None)
-    AI_TEXT_ANALYZE_MODEL = os.environ.get("AI_TEXT_ANALYZE_MODEL", None)
-
-except KeyError:
-    if AI_ENABLED:
-        sys.exit("Please set AI settings in .env file")
-    else:
-        AI_AI_AGENT_SCHEDULE_START = None
-        AI_IMAGE_ANALYZE_API_KEY = None
-        AI_IMAGE_ANALYZE_MODEL = None
-        AI_TEXT_ANALYZE_API_KEY = None
-        AI_TEXT_ANALYZE_MODEL = None
-
-# other settings
-try:
-    TIMELAPSE_INTERVAL = int(os.environ["TIMELAPSE_INTERVAL"])
-except KeyError:
-    exit("Please set TIMELAPSE_INTERVAL in .env file")
+from ina_device_hub import ina_env
 
 
 def get_device_id():
@@ -115,48 +23,48 @@ DEFAULT_SETTINGS = {
     "language": os.environ.get("LANGUAGE", "en"),
     "tenant_id": "00000000-0000-0000-0000-000000000000",
     "device_id": get_device_id(),
-    "device_name": DEVICE_NAME,
+    "device_name": ina_env.DEVICE_NAME,
     "turso": {
-        "database_url": TURSO_DATABASE_URL,
-        "auth_token": TURSO_AUTH_TOKEN,
-        "sync_interval": TURSO_SYNC_INTERVAL,
-        "local_db_path": os.path.join(os.path.expanduser(WORK_DIR), "ina.db"),
+        "database_url": ina_env.TURSO_DATABASE_URL,
+        "auth_token": ina_env.TURSO_AUTH_TOKEN,
+        "sync_interval": ina_env.TURSO_SYNC_INTERVAL,
+        "local_db_path": os.path.join(os.path.expanduser(ina_env.WORK_DIR), "ina.db"),
     },
     "storage_bucket": {
-        "endpoint_url": S3_ENDPOINT_URL,
-        "bucket_name": S3_BUCKET_NAME,
-        "region": S3_BUCKET_REGION,
-        "access_key": S3_ACCESS_KEY,
-        "secret_key": S3_SECRET_KEY,
+        "endpoint_url": ina_env.S3_ENDPOINT_URL,
+        "bucket_name": ina_env.S3_BUCKET_NAME,
+        "region": ina_env.S3_BUCKET_REGION,
+        "access_key": ina_env.S3_ACCESS_KEY,
+        "secret_key": ina_env.S3_SECRET_KEY,
     },
-    "local_storage_base_dir": LOCAL_STORAGE_BASE_DIR,
-    "timelapse_interval": TIMELAPSE_INTERVAL,
+    "local_storage_base_dir": ina_env.LOCAL_STORAGE_BASE_DIR,
+    "timelapse_interval": ina_env.TIMELAPSE_INTERVAL,
     "mqtt": {
-        "mqtt_broker": MQTT_BROKER_URL,
-        "mqtt_port": MQTT_BROKER_PORT,
-        "mqtt_client_id": DEVICE_NAME,
-        "mqtt_username": MQTT_BROKER_USERNAME,
-        "mqtt_password": MQTT_BROKER_PASSWORD,
+        "mqtt_broker": ina_env.MQTT_BROKER_URL,
+        "mqtt_port": ina_env.MQTT_BROKER_PORT,
+        "mqtt_client_id": ina_env.DEVICE_NAME,
+        "mqtt_username": ina_env.MQTT_BROKER_USERNAME,
+        "mqtt_password": ina_env.MQTT_BROKER_PASSWORD,
     },
     "sensor": {
-        "save_image": SENSOR_SAVE_IMAGE,
-        "save_audio": SENSOR_SAVE_AUDIO,
+        "save_image": ina_env.SENSOR_SAVE_IMAGE,
+        "save_audio": ina_env.SENSOR_SAVE_AUDIO,
         "blacklist": [],
     },
     "ai": {
         "enabled": False,
         "schedule": {
-            "start": AI_AGENT_SCHEDULE_START,
+            "start": ina_env.AI_AGENT_SCHEDULE_START,
         },
         "image_analyze": {
-            "api_key": AI_IMAGE_ANALYZE_API_KEY,
-            "base_url": AI_IMAGE_ANALYZE_BASE_URL,
-            "model": AI_IMAGE_ANALYZE_MODEL,
+            "api_key": ina_env.AI_IMAGE_ANALYZE_API_KEY,
+            "base_url": ina_env.AI_IMAGE_ANALYZE_BASE_URL,
+            "model": ina_env.AI_IMAGE_ANALYZE_MODEL,
         },
         "text_analyze": {
-            "api_key": AI_TEXT_ANALYZE_API_KEY,
-            "base_url": AI_TEXT_ANALYZE_BASE_URL,
-            "model": AI_TEXT_ANALYZE_MODEL,
+            "api_key": ina_env.AI_TEXT_ANALYZE_API_KEY,
+            "base_url": ina_env.AI_TEXT_ANALYZE_BASE_URL,
+            "model": ina_env.AI_TEXT_ANALYZE_MODEL,
         },
     },
 }
@@ -196,7 +104,7 @@ class Setting:
         self.save()
 
     def get_work_dir(self):
-        return WORK_DIR
+        return ina_env.WORK_DIR
 
 
 __instance = None
