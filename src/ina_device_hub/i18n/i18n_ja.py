@@ -36,6 +36,6 @@ dictionary = {
     "no_image": "画像がありません",
     "read_more": "もっと読む",
     "close": "閉じる",
-    "date": "最日付",
+    "date": "日付",
     "report_of_crop_growth": "作物の成長レポート",
 }

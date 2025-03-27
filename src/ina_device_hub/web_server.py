@@ -248,10 +248,12 @@ def get_location_detail(location_id):
         if len(today_images) < max_image_len:
             # 昨日の画像を取得
             date_filter = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y%m%d")
-            yesterday_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=max_image_len - len(today_images))
+            yesterday_images = camera_image_repository().get_date_image_by_id(camera["id"], date_filter, limit=2 * max_image_len)
             camera_latest_images[camera["id"]].extend(yesterday_images)
             # sort as key
             camera_latest_images[camera["id"]].sort(key=lambda x: x.get("key"))
+            if len(camera_latest_images[camera["id"]]) > max_image_len:
+                camera_latest_images[camera["id"]] = camera_latest_images[camera["id"]][len(camera_latest_images[camera["id"]]) - max_image_len :]
 
     # 直近のAI Agentの評価結果を取得
     # evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
