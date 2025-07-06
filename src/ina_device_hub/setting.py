@@ -49,6 +49,49 @@ DEFAULT_SETTINGS = {
     "sensor": {
         "save_image": ina_env.SENSOR_SAVE_IMAGE,
         "save_audio": ina_env.SENSOR_SAVE_AUDIO,
+        # 各センサーがこなすタスク
+        # TODO: デバイスごとに設定ページで変更できるようにする
+        # センサーからタスク要求が来た場合は、ここで定義されるタスク、スケジュール
+        # を参照して、今から実行すべきタスクをセンサーに通知する
+        # 通知はMQTTでHEX String形式で送信する
+        #
+        # |MAGIC Number[2byte]|次のタスク開始までの時間(秒)[4byte]|[タスクID[1byte]][タスクのパラメータ[3byte]]|...[XOR]
+        # デバイス側は、タスク開始前に tick を保存しておき、タスク実行後にタスクの所要時間を「次のタスク開始までの時間」から
+        # 引いて、次のタスク開始までの時間をSleepする
+        "task": {
+            "INADS-110387bd-baaa-441b-ada9-0ab58407fd2c": {
+                "tasks": [
+                    # センサー値報告
+                    {
+                        "taskName": "sensorDataReport",
+                        # Every 30 minutes
+                        "schedule": "*/30 * * * *",
+                    },
+                    # センサ値から必要な液肥の量を計算してポンプを動かす
+                    # 肥料の量をどのように計算するかはセンサー側で行う
+                    {
+                        "taskName": "fertilizer",
+                        "pumpId": 1,
+                        # ポンプを動かす時間
+                        "durationSec": 60,
+                        # Every day at 8:00(UTC)
+                        "schedule": "0 8 * * *",
+                    },
+                    # 水やり
+                    {
+                        "taskName": "watering",
+                        "valveId": 1,
+                        # ソレノイドバルブ、またはポンプを動かす時間
+                        # NOTE: ソレノイドバルブの開閉のクールダウンは
+                        #   センサーデバイス側で行うので、ここでは
+                        #   積算で何秒開けるかを指定する
+                        "durationSec": 300,
+                        # Every day at 21:00(UTC)
+                        "schedule": "0 21 * * *",
+                    },
+                ],
+            }
+        },
         "blacklist": [],
     },
     "ai": {
@@ -66,6 +109,9 @@ DEFAULT_SETTINGS = {
             "base_url": ina_env.AI_TEXT_ANALYZE_BASE_URL,
             "model": ina_env.AI_TEXT_ANALYZE_MODEL,
         },
+    },
+    "notification": {
+        "discord_webhook_url": ina_env.DISCORD_WEBHOOK_URL,
     },
 }
 

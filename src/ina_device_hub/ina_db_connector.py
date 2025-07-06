@@ -8,7 +8,7 @@ import json
 import os
 import re
 
-import libsql_experimental as libsql
+import libsql
 
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting

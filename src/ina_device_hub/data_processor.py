@@ -11,10 +11,10 @@ from ina_device_hub.sensor_data_queue import SensorDataQueue
 from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
+from ina_device_hub.notification import Notification
 
 
 class DataProcessor:
-
     def __init__(self):
         self.sensor_data_queue = SensorDataQueue()
         self.sensor_device_repository = sensor_device_repository()
@@ -63,9 +63,7 @@ class DataProcessor:
                     pass
                 else:
                     # 規定外のメッセージの場合はログ出力
-                    logger.error(
-                        f"Device {message['sensor_id']} sensor data: {message['payload']}"
-                    )
+                    logger.error(f"Device {message['sensor_id']} sensor data: {message['payload']}")
                 # キューからメッセージを取り出し完了
                 self.sensor_data_queue.task_done()
             except queue.Empty:
@@ -95,6 +93,8 @@ class DataProcessor:
 
         # 文字列から辞書型に変換
         payload_as_dict = json.loads(payload)
+
+        self.check_sensor_data(sensor_id, seqId, payload_as_dict)
 
         self.sensor_data_repository.add(sensor_id, seqId, payload_as_dict)
 
@@ -143,10 +143,7 @@ class DataProcessor:
 
         self.image_buffer[sensor_id][seqId]["image"].extend(image_fragment)
         # check whether all image data received
-        if (
-            len(self.image_buffer[sensor_id][seqId]["image"])
-            >= self.image_buffer[sensor_id][seqId]["size"]
-        ):
+        if len(self.image_buffer[sensor_id][seqId]["image"]) >= self.image_buffer[sensor_id][seqId]["size"]:
             # all image data received
             logger.debug(f"[{sensor_id}:{seqId}] all image data received")
             # all image data received
@@ -189,10 +186,7 @@ class DataProcessor:
         self.audio_buffer[sensor_id][seqId]["audio"].extend(audio_fragment)
         self.audio_buffer[sensor_id][seqId]["count"] += 1
         # check whether all audio data received
-        if (
-            self.audio_buffer[sensor_id][seqId]["count"]
-            >= self.audio_buffer[sensor_id][seqId]["all_count"]
-        ):
+        if self.audio_buffer[sensor_id][seqId]["count"] >= self.audio_buffer[sensor_id][seqId]["all_count"]:
             # all audio data received
             logger.debug(f"[{sensor_id}:{seqId}] all audio data received")
             # all audio data received
@@ -200,3 +194,30 @@ class DataProcessor:
             del self.audio_buffer[sensor_id][seqId]
             # save audio data
             # self.sensor_audio_repogitory.save(sensor_id, audio_data)
+
+    def check_sensor_data(self, sensor_id, seqId, payload):
+        """
+        Check sensor data
+        Args:
+            sensor_id (str): device id
+            seqId (int): sequence id
+            payload (str): message payload
+                dict - sensor data
+        """
+        # TDS をチェック
+        if "tds" in payload:
+            tds = payload["tds"]
+            tds_min_threshold = setting().get("sensor").get("tds_min_threshold", 800)
+            tds_max_threshold = setting().get("sensor").get("tds_max_threshold", 1100)
+            if tds < tds_min_threshold or tds > tds_max_threshold:
+                logger.warning(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")
+                Notification.send_discord_message(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")
+
+        if "last_soil_moisture" in payload:
+            last_soil_moisture = payload["last_soil_moisture"]
+            soil_moisture_min_threshold = setting().get("sensor").get("soil_moisture_min_threshold", 40)
+            if last_soil_moisture < soil_moisture_min_threshold:
+                logger.warning(f"Sensor {sensor_id} soil moisture value {last_soil_moisture} is less than the minimum threshold {soil_moisture_min_threshold}")
+                Notification.send_discord_message(
+                    f"Sensor {sensor_id} soil moisture value {last_soil_moisture} < {soil_moisture_min_threshold} (min threshold)"
+                )

@@ -89,6 +89,12 @@ except KeyError:
         AI_TEXT_ANALYZE_API_KEY = None
         AI_TEXT_ANALYZE_MODEL = None
 
+# Notification settings
+try:
+    DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+except KeyError:
+    DISCORD_WEBHOOK_URL = None
+
 # other settings
 try:
     TIMELAPSE_INTERVAL = int(os.environ["TIMELAPSE_INTERVAL"])

@@ -11,7 +11,7 @@ def run():
     data_processor = DataProcessor()
     hub_mqtt_client = HubMQTTClient(data_processor.sensor_data_queue)
     hub_mqtt_client.connect_mqtt()
-    hub_mqtt_client.subscribe("sensor/+/#")
+    hub_mqtt_client.subscribe()
 
     # メッセージ処理用のワーカースレッドを開始
     data_processor.start()
