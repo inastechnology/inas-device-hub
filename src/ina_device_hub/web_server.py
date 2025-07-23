@@ -225,7 +225,7 @@ def get_location_detail(location_id):
         if sensor["name"] is None:
             sensor["name"] = sensor["id"]
         sensor["latest"] = sensor_data_repository().get_latest(sensor["id"])
-        sensor["latest_aggreated"] = sensor_data_repository().get_latest_aggreated(sensor["id"])
+        sensor["latest_aggreated"] = sensor_data_repository().get_latest_aggreated(sensor["id"], limit=104)
         # create graph
         sensor["graph"] = Utils.create_latest_aggregated_graph_as_html(sensor["id"], sensor["latest_aggreated"])
 

@@ -20,6 +20,21 @@ class Notification:
         else:
             print(f"Failed to send message. Status code: {response.status_code}, Response: {response.text}")
 
+    @staticmethod
+    def send_discord_message_with_image(message, image_bytes, filename="image.png"):
+        data = {"content": message}
+
+        # 画像データをファイルとしてアップロードする準備
+        files = {"file": (filename, image_bytes, "image/png")}
+
+        # Webhookに画像を送信
+        response = requests.post(setting().get("notification")["discord_webhook_url"], data=data, files=files)
+
+        if 200 <= response.status_code < 300:
+            print("スクリーンショットが送信されました")
+        else:
+            print(f"エラーが発生しました: {response.status_code}")
+
 
 if __name__ == "__main__":
     # Example usage

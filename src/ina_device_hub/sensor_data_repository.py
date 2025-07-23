@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from ina_device_hub.general_log import logger
 from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.setting import setting
+import ast
 
 
 class SensorDataRepository:
@@ -24,6 +25,14 @@ class SensorDataRepository:
         # construct extra
         data["extra"] = {"light_status": self.light_status_dict.get(None, {})}
 
+        # watering sec, if available
+        if "watering" in data:
+            data["extra"]["watering"] = data["watering"]
+
+        # last soil moisture, if available
+        if "last_soil_moisture" in data:
+            data["extra"]["last_soil_moisture"] = data["last_soil_moisture"]
+
         # latest data record
         self.__insert_latest_data(sensor_id, data)
 
@@ -37,8 +46,18 @@ class SensorDataRepository:
 
         self.tmp_sensor_data_dict[sensor_id][current_yyyymmdd_hh].append(data)
 
-        # save tmp sensor data
-        self.__save_tmp_sensor_data()
+        # 受領したデータに watering と soil moisture の値がある場合は、データを即時アグリゲートする
+        if "watering" in data and "last_soil_moisture" in data:
+            aggregated_data = self.__aggregate_data(sensor_id, current_yyyymmdd_hh)
+            if aggregated_data:
+                self.__insert_aggreated_data(sensor_id, current_yyyymmdd_hh, aggregated_data)
+                del self.tmp_sensor_data_dict[sensor_id][current_yyyymmdd_hh]
+                self.__save_tmp_sensor_data()
+
+            return
+        else:
+            # save tmp sensor data
+            self.__save_tmp_sensor_data()
 
         # whether aggregate or not
         # older than 1hours
@@ -96,8 +115,17 @@ class SensorDataRepository:
         ret = []
         for d in data:
             try:
-                extra = json.loads(d[10])
-            except json.JSONDecodeError:
+                if type(d[11]) is str:
+                    # if extra is a string, parse it as JSON
+                    extra = json.loads(d[11])
+                elif type(d[11]) is dict:
+                    # if extra is already a dict, use it as is
+                    extra = d[11]
+                else:
+                    # if extra is neither, raise an error
+                    raise ValueError(f"Unexpected type for extra: {type(d[11])}")
+            except Exception as e:
+                logger.error(f"Failed to parse extra JSON: {d[11]} - {e}")
                 extra = {}
             ret.append(
                 {
@@ -110,7 +138,8 @@ class SensorDataRepository:
                     "ammonia": d[6],
                     "nitrate": d[7],
                     "yyyymmddhh": datetime.strptime(str(d[8]), "%Y%m%d%H").replace(tzinfo=UTC).astimezone(),
-                    "created_at": d[9],
+                    "location_id": d[9],
+                    "created_at": datetime.strptime(d[10], "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC).astimezone(),
                     "extra": extra,
                 }
             )
@@ -158,6 +187,9 @@ class SensorDataRepository:
         light_status_list = []
         light_status_point = 0
 
+        max_watering_sec = 0
+        min_soil_moisture = 1000
+
         data = self.tmp_sensor_data_dict[sensor_id][yyyymmdd_hh]
 
         for elem in data:
@@ -182,6 +214,20 @@ class SensorDataRepository:
                 except Exception as e:
                     logger.exception(f"Failed to aggregate light status: {e}:{elem['extra']}")
 
+                # watering sec
+                if "watering" in elem["extra"]:
+                    max_watering_sec = max(
+                        max_watering_sec,
+                        elem["extra"]["watering"],
+                    )
+
+                # min soil moisture
+                if "last_soil_moisture" in elem["extra"]:
+                    min_soil_moisture = min(
+                        min_soil_moisture,
+                        elem["extra"]["last_soil_moisture"],
+                    )
+
         avg_temp = sum(temps) / len(temps) if len(temps) > 0 else -1000
         avg_tds = sum(tdss) / len(tdss) if len(tdss) > 0 else -1000
         led_status = True if light_status_point > 0 else False
@@ -191,7 +237,9 @@ class SensorDataRepository:
         extra = {
             "light_status": {
                 "status": led_status,
-            }
+            },
+            "max_watering_sec": max_watering_sec if max_watering_sec > 0 else None,
+            "min_soil_moisture": min_soil_moisture if min_soil_moisture < 1000 else None,
         }
 
         return {
@@ -207,7 +255,7 @@ class SensorDataRepository:
         )
 
     def __insert_aggreated_data(self, sensor_id: str, yyyymmdd_hh: str, data: dict):
-        self.db_connector.insert_aggregated_sensor_data(
+        self.db_connector.upsert_aggregated_sensor_data(
             sensor_id,
             yyyymmdd_hh,
             data,

@@ -225,6 +225,38 @@ class InaDBConnector:
             ") "
         )
 
+    @turso_db_commit
+    def upsert_aggregated_sensor_data(self, sensor_id: str, yyyymmdd_hh: str, data: dict):
+        """
+        集計済センサーデータ（拡張版）を登録／更新します。複合キー（sensor_id, yyyymmddhh）。
+        INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
+        """
+        self.conn.execute(
+            "INSERT INTO aggregated_sensor_data (sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(sensor_id, yyyymmddhh) DO UPDATE SET "
+            "temp = excluded.temp, "
+            "tds = excluded.tds, "
+            "ec = excluded.ec, "
+            "ph = excluded.ph, "
+            "dissolved_oxygen = excluded.dissolved_oxygen, "
+            "ammonia = excluded.ammonia, "
+            "nitrate = excluded.nitrate, "
+            "extra = excluded.extra",
+            (
+                sensor_id,
+                data.get("temp", -1000.0),
+                data.get("tds", -1000.0),
+                data.get("ec", -1000.0),
+                data.get("ph", -1000.0),
+                data.get("dissolved_oxygen", -1000.0),
+                data.get("ammonia", -1000.0),
+                data.get("nitrate", -1000.0),
+                yyyymmdd_hh,
+                json.dumps(data.get("extra", {})),
+            ),
+        )
+
     def fetch_latest_sensor_data(self, sensor_id: str):
         """
         最新センサーデータを取得します。

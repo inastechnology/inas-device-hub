@@ -10,7 +10,11 @@ from ina_device_hub.camera_image_repository import camera_image_repository
 from ina_device_hub.general_log import logger
 from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.location_repository import location_repository
+from ina_device_hub.notification import Notification
+from ina_device_hub.sensor_data_repository import sensor_data_repository
+from ina_device_hub.sensor_device_repository import sensor_device_repository
 from ina_device_hub.setting import setting
+from ina_device_hub.utils import Utils
 
 
 class InaAgent:
@@ -179,6 +183,7 @@ Objective:
         # choose one image
         # TODO: choose the best image
         target_img = None
+        target_img_as_bytes = None
         for sensor_id, images in image_dict.items():
             if images:
                 target_img = images[0]
@@ -257,6 +262,27 @@ OUTPUT:
 
         # save result
         self.ina_db_connector.upsert_evaluation_result(location_id, input_str, evaluate_result, evaluate_summary_result)
+
+        # notify result
+        if target_img_as_bytes is not None:
+            Notification.send_discord_message_with_image(
+                evaluate_result,
+                target_img_as_bytes,
+                filename=f"evaluation_{location_id}_{target_date.strftime('%Y%m%d')}.jpg",
+            )
+        else:
+            Notification.send_discord_message(evaluate_result)
+
+        # notify summary as graph
+        # sensor info
+        sensors = sensor_device_repository().get_by_location(location_id)
+        for sensor in sensors:
+            if sensor["name"] is None:
+                sensor["name"] = sensor["id"]
+            sensor["latest"] = sensor_data_repository().get_latest(sensor["id"])
+            sensor["latest_aggreated"] = sensor_data_repository().get_latest_aggreated(sensor["id"], limit=72)
+            # create graph
+            sensor["graph"] = Utils.create_latest_aggregated_graph_as_html(sensor["id"], sensor["latest_aggreated"])
 
 
 __instance = None

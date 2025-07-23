@@ -213,11 +213,11 @@ class DataProcessor:
                 logger.warning(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")
                 Notification.send_discord_message(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")
 
-        if "last_soil_moisture" in payload:
+        if "watering" in payload and "last_soil_moisture" in payload:
+            watering_sec = payload["watering"]
             last_soil_moisture = payload["last_soil_moisture"]
-            soil_moisture_min_threshold = setting().get("sensor").get("soil_moisture_min_threshold", 40)
-            if last_soil_moisture < soil_moisture_min_threshold:
-                logger.warning(f"Sensor {sensor_id} soil moisture value {last_soil_moisture} is less than the minimum threshold {soil_moisture_min_threshold}")
-                Notification.send_discord_message(
-                    f"Sensor {sensor_id} soil moisture value {last_soil_moisture} < {soil_moisture_min_threshold} (min threshold)"
-                )
+            if watering_sec > 0:
+                # デバイスが土壌水分の不足を検知した場合
+                logger.warning(f"Sensor {sensor_id} watering sec {watering_sec} is greater than 0: moisture {last_soil_moisture}")
+                # Discord 通知を送信
+                Notification.send_discord_message(f"Sensor {sensor_id} watering sec {watering_sec} is greater than 0: moisture {last_soil_moisture}")
