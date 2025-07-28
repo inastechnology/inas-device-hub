@@ -24,6 +24,14 @@ def turso_db_commit(func):
             result = func(self, *args, **kwargs)
             self.conn.commit()
             return result
+        except ValueError as e:
+            # エラーハンドリング（必要に応じてログ出力等）
+            logger.exception("Error occurred:", e)
+            if "stream not found" in str(e):
+                logger.error("Stream not found error occurred. Reconnecting to the database.")
+                self.reconnect()
+                return func(self, *args, **kwargs)
+            raise
         except Exception as e:
             # エラーハンドリング（必要に応じてログ出力等）
             logger.exception("Error occurred:", e)
@@ -69,6 +77,19 @@ class InaDBConnector:
 
     def __reindex(self):
         self.conn.execute("REINDEX")
+
+    def reconnect(self):
+        """
+        データベースに再接続します。
+        """
+        self.conn.close()
+        turso_settings = setting().get("turso")
+        db_path = turso_settings.get("local_db_path")
+        url = turso_settings.get("database_url")
+        auth_token = turso_settings.get("auth_token")
+        sync_interval = turso_settings.get("sync_interval")
+        self.conn = libsql.connect(db_path, sync_interval=sync_interval, sync_url=url, auth_token=auth_token)
+        self.conn.sync()
 
     def fetch_location_all(self):
         """

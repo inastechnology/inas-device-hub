@@ -37,6 +37,23 @@ DEFAULT_SETTINGS = {
         "access_key": ina_env.S3_ACCESS_KEY,
         "secret_key": ina_env.S3_SECRET_KEY,
     },
+    "tmp_bucket": {
+        "endpoint_url": ina_env.S3_TMP_ENDPOINT_URL,
+        "bucket_name": ina_env.S3_TMP_BUCKET_NAME,
+        "region": ina_env.S3_TMP_BUCKET_REGION,
+        "access_key": ina_env.S3_TMP_ACCESS_KEY,
+        "secret_key": ina_env.S3_TMP_SECRET_KEY,
+        "base_url": ina_env.S3_TMP_BASE_URL,
+    },
+    "instagram": {
+        "user_id": ina_env.INSTAGRAM_USER_ID,
+        "access_token": ina_env.INSTAGRAM_ACCESS_TOKEN,
+        "post_info": {
+            "sensor_id": ina_env.INSTAGRAM_SENSOR_ID,
+            "camera_id": ina_env.INSTAGRAM_CAMERA_ID,
+            "plant_position_prompt": ina_env.INSTAGRAM_PLANT_POSITION_PROMPT,
+        },
+    },
     "local_storage_base_dir": ina_env.LOCAL_STORAGE_BASE_DIR,
     "timelapse_interval": ina_env.TIMELAPSE_INTERVAL,
     "mqtt": {

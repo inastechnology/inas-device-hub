@@ -1,4 +1,5 @@
 import os
+import subprocess
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -9,6 +10,7 @@ from flask import (
     render_template,
     render_template_string,
     request,
+    stream_with_context,
 )
 
 from ina_device_hub.camera_connector import camera_connector
@@ -397,6 +399,26 @@ def preview_camera(sensor_id):
     </html>
     """
     return render_template_string(html, sensor_id=sensor_id)
+
+
+def generate_logs():
+    # journalctl プロセスを起動
+    proc = subprocess.Popen(
+        ["journalctl", "-f", "-u", "inas-device-hub@backend", "--output", "cat"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,  # str で受け取る
+        bufsize=1,  # 行単位の自動フラッシュ
+    )
+    try:
+        yield from proc.stdout
+    finally:
+        proc.terminate()
+
+
+@app.route("/log")
+def get_log():
+    return Response(stream_with_context(generate_logs()), mimetype="text/plain")
 
 
 # ==========================================

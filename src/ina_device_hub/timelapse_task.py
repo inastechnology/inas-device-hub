@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 import threading
 
 from apscheduler.schedulers.background import BlockingScheduler
@@ -43,15 +44,36 @@ class TimelapseTask:
                 # skip devices that are not timelapse
                 continue
 
-            img_bytes = camera.take_picture(sensor_id)
-            if img_bytes:
-                is_on, confidence = ImageUtils.is_led_on_with_confidence(img_bytes)
-                print(f"Light status: {is_on}, confidence: {confidence}")
-                # TODO: location_id should be fetched from the camera info
-                self.sensor_data_repository.update_light_status(None, is_on, confidence)
-                self.camera_image_repository.save_to_cloud(sensor_id, img_bytes)
-            else:
-                logger.error(f"Failed to take picture: {sensor_id}")
+            camera_type = info.get("type", "unknown")
+            if camera_type == "INACD":
+                img_bytes = camera.take_picture(sensor_id)
+                if img_bytes:
+                    is_on, confidence = ImageUtils.is_led_on_with_confidence(img_bytes)
+                    print(f"Light status: {is_on}, confidence: {confidence}")
+                    # TODO: location_id should be fetched from the camera info
+                    self.sensor_data_repository.update_light_status(None, is_on, confidence)
+                    self.camera_image_repository.save_to_cloud(sensor_id, img_bytes)
+                else:
+                    logger.error(f"Failed to take picture: {sensor_id}")
+            elif camera_type == "FTP":
+                directory = info.get("directory")
+                if not directory:
+                    logger.error(f"Directory not set for camera {sensor_id}")
+                    continue
+                # Fetch the latest image from the FTP server
+                # e.g. {directory}/yyyy/mm/dd/xxx_xx_yyyymmddHHMMSS.jpg
+                today_dir = datetime.now().strftime("%Y/%m/%d")
+                today_images = [os.path.join(directory, today_dir, f) for f in os.listdir(os.path.join(directory, today_dir)) if f.endswith(".jpg")]
+                if not today_images:
+                    logger.warning(f"No images found in {today_dir} for camera {sensor_id}")
+                    continue
+                latest_image = max(today_images, key=os.path.getctime)
+                with open(latest_image, "rb") as f:
+                    img_bytes = f.read()
+                if img_bytes:
+                    self.camera_image_repository.save_to_cloud(sensor_id, img_bytes)
+                else:
+                    logger.error(f"Failed to read image from {latest_image} for camera {sensor_id}")
 
 
 __instance = None

@@ -125,7 +125,7 @@ class SensorDataRepository:
                     # if extra is neither, raise an error
                     raise ValueError(f"Unexpected type for extra: {type(d[11])}")
             except Exception as e:
-                logger.error(f"Failed to parse extra JSON: {d[11]} - {e}")
+                logger.exception(f"Failed to parse extra JSON: {d[11]} - {e}")
                 extra = {}
             ret.append(
                 {

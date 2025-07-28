@@ -94,7 +94,7 @@ class DataProcessor:
         # 文字列から辞書型に変換
         payload_as_dict = json.loads(payload)
 
-        self.check_sensor_data(sensor_id, seqId, payload_as_dict)
+        self.on_receive_sensor_data(sensor_id, seqId, payload_as_dict)
 
         self.sensor_data_repository.add(sensor_id, seqId, payload_as_dict)
 
@@ -195,9 +195,10 @@ class DataProcessor:
             # save audio data
             # self.sensor_audio_repogitory.save(sensor_id, audio_data)
 
-    def check_sensor_data(self, sensor_id, seqId, payload):
+    def on_receive_sensor_data(self, sensor_id, seqId, payload):
         """
-        Check sensor data
+        Process received sensor data
+        e.g. notify Discord if TDS or watering data is out of range
         Args:
             sensor_id (str): device id
             seqId (int): sequence id
@@ -208,7 +209,7 @@ class DataProcessor:
         if "tds" in payload:
             tds = payload["tds"]
             tds_min_threshold = setting().get("sensor").get("tds_min_threshold", 800)
-            tds_max_threshold = setting().get("sensor").get("tds_max_threshold", 1100)
+            tds_max_threshold = setting().get("sensor").get("tds_max_threshold", 1220)
             if tds < tds_min_threshold or tds > tds_max_threshold:
                 logger.warning(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")
                 Notification.send_discord_message(f"Sensor {sensor_id} TDS value {tds} is out of range ({tds_min_threshold}, {tds_max_threshold})")

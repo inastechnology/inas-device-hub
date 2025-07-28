@@ -37,18 +37,32 @@ class LocationRepository:
             # city TEXT,
             # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             # updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            location_dict[location[0]] = {
-                "name": location[1],
-                "description": location[2],
-                "longitude": location[3],
-                "latitude": location[4],
-                "info": location[5],
-                "location_type": location[6],
-                "country": location[7],
-                "city": location[8],
-                "created_at": location[9],
-                "updated_at": location[10],
-            }
+            if len(location) < 11:
+                location_dict[location[0]] = {
+                    "name": location[1],
+                    "description": location[2],
+                    "longitude": -1000,
+                    "latitude": -1000,
+                    "info": {},
+                    "location_type": "unknown",
+                    "country": "unknown",
+                    "city": "unknown",
+                    "created_at": location[3],
+                    "updated_at": location[4],
+                }
+            else:
+                location_dict[location[0]] = {
+                    "name": location[1],
+                    "description": location[2],
+                    "longitude": location[3],
+                    "latitude": location[4],
+                    "info": location[5] if location[5] else {},
+                    "location_type": location[6] if location[6] else "unknown",
+                    "country": location[7] if location[7] else "unknown",
+                    "city": location[8] if location[8] else "unknown",
+                    "created_at": location[9],
+                    "updated_at": location[10],
+                }
 
         if not os.path.exists(self.local_location_repo_path):
             # create empty file

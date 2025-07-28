@@ -21,11 +21,12 @@ class Notification:
             print(f"Failed to send message. Status code: {response.status_code}, Response: {response.text}")
 
     @staticmethod
-    def send_discord_message_with_image(message, image_bytes, filename="image.png"):
+    def send_discord_message_with_image(message, image_tuples):
         data = {"content": message}
 
         # 画像データをファイルとしてアップロードする準備
-        files = {"file": (filename, image_bytes, "image/png")}
+        # image_tuples = [(image_name, image_bytes), ...]
+        files = {f"file_{i}": (image_name, image_bytes, f"image/{image_name.split('.')[-1]}") for i, (image_name, image_bytes) in enumerate(image_tuples)}
 
         # Webhookに画像を送信
         response = requests.post(setting().get("notification")["discord_webhook_url"], data=data, files=files)

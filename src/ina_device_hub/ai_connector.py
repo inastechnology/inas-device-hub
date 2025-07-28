@@ -44,6 +44,48 @@ class AIConnector:
 
         return response.choices[0].message.content
 
+    def analyze_multi_images(
+        self, target_image_list: list[bytes], file_format: str = "jpg", system_prompt: str = None, message: str = None, max_tokens: int = 2048
+    ) -> str:
+        image_analyze_setting = self.ai_setting["image_analyze"]
+        api_key = image_analyze_setting["api_key"]
+        base_url = image_analyze_setting.get("base_url")
+        model = image_analyze_setting["model"]
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        if system_prompt is None:
+            system_prompt = """
+            Please write a detailed analysis of the images.
+            """
+
+        content = []
+        if message:
+            content.append({"type": "text", "text": message})
+
+        for target_image in target_image_list:
+            target_image_base64 = base64.b64encode(target_image).decode("utf-8")
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/{file_format};base64,{target_image_base64}"}})
+
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
+                {"role": "user", "content": content},
+            ],
+            temperature=0,
+            max_tokens=max_tokens,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+            response_format={"type": "text"},
+        )
+
+        output_text = response.choices[0].message.content
+        if not output_text:
+            logger.error(f"AI response is empty: {response}")
+
+        return output_text.strip() if output_text else None
+
     def analyze_text(self, message: str, system_prompt: str = None, max_tokens: int = 2048) -> str:
         text_analyze_setting = self.ai_setting["text_analyze"]
         api_key = text_analyze_setting["api_key"]
@@ -68,7 +110,11 @@ class AIConnector:
             stream=False if "seek" in model.lower() else True,
         )
 
-        return response.choices[0].message.content
+        output_text = response.choices[0].message.content
+        if not output_text:
+            logger.error(f"AI response is empty: {response}")
+
+        return output_text.strip() if output_text else None
 
 
 __instance = None

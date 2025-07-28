@@ -1,5 +1,8 @@
+import base64
+import hashlib
 import os
 import time
+import zlib
 import boto3
 import json
 from datetime import datetime, timezone, timedelta, UTC
@@ -41,6 +44,14 @@ class StorageConnector:
             region_name=setting().get("storage_bucket").get("region"),
         )
 
+        self.s3_tmp = boto3.client(
+            "s3",
+            endpoint_url=setting().get("tmp_bucket").get("endpoint_url"),
+            aws_access_key_id=setting().get("tmp_bucket").get("access_key"),
+            aws_secret_access_key=setting().get("tmp_bucket").get("secret_key"),
+            region_name=setting().get("tmp_bucket").get("region"),
+        )
+
     def save_to_cloud(self, file_key, file_bytes, content_type="image/jpeg"):
         """
         Saves the file to cloud storage.
@@ -55,6 +66,46 @@ class StorageConnector:
                 Key=file_path,
                 Body=file_bytes,
                 ContentType=content_type,
+            )
+            logger.info(f"Image uploaded to {file_path}({len(file_bytes)} bytes)")
+        except Exception as e:
+            logger.exception(f"Error: {e}")
+            return None
+        return file_path
+
+    def save_to_cloud_as_tmp(self, file_key, file_bytes, content_type="image/jpeg"):
+        """
+        Saves the file to cloud storage.
+        Automatically generates the file path based on the file key and the current date and time(UTC).
+        e.g.) file path: tmp/{tenant_id}/{file_key}/{yyyymmdd}/{yyyymmdd_hhmmss}.jpg
+        """
+        file_path = os.path.join("tmp", self.get_file_path(file_key))
+        # content_type によって拡張子を変更
+        if content_type == "image/jpeg":
+            # jpeg の場合は .jpg なので何もしない
+            pass
+        elif content_type == "image/png":
+            file_path = file_path.replace(".jpg", ".png")
+        elif content_type == "image/webp":
+            file_path = file_path.replace(".jpg", ".webp")
+        elif content_type == "image/gif":
+            file_path = file_path.replace(".jpg", ".gif")
+        elif content_type == "video/mp4":
+            file_path = file_path.replace(".jpg", ".mp4")
+
+        # check sum crc32 を作成
+        crc32_int = zlib.crc32(file_bytes) & 0xFFFFFFFF  # 32bit 符号なし
+        crc32_b64 = base64.b64encode(crc32_int.to_bytes(4, "big")).decode()
+
+        try:
+            # TODO: [Multi-tenancy] The bucket name should be generated based on the tenant_id.
+            self.s3_tmp.put_object(
+                Bucket=setting().get("storage_bucket").get("bucket_name") + "-tmp",
+                Key=file_path,
+                Body=file_bytes,
+                ContentType=content_type,
+                ContentLength=len(file_bytes),  # 必須
+                ChecksumCRC32=crc32_b64,
             )
             logger.info(f"Image uploaded to {file_path}({len(file_bytes)} bytes)")
         except Exception as e:

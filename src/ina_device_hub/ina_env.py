@@ -46,6 +46,29 @@ try:
 except KeyError as e:
     exit(f"Please set {e} in .env file")
 
+# S3 temporary storage settings
+try:
+    S3_TMP_ENDPOINT_URL = os.environ["S3_TMP_ENDPOINT_URL"]
+    S3_TMP_BUCKET_NAME = os.environ["S3_TMP_BUCKET_NAME"]
+    S3_TMP_BUCKET_REGION = os.environ["S3_TMP_BUCKET_REGION"]
+    S3_TMP_ACCESS_KEY = os.environ["S3_TMP_ACCESS_KEY"]
+    S3_TMP_SECRET_KEY = os.environ["S3_TMP_SECRET_KEY"]
+    S3_TMP_BASE_URL = os.environ["S3_TMP_BASE_URL"]
+except KeyError as e:
+    exit(f"Please set {e} in .env file")
+
+# Instagram settings
+try:
+    INSTAGRAM_USER_ID = os.environ["INSTAGRAM_USER_ID"]
+    INSTAGRAM_ACCESS_TOKEN = os.environ["INSTAGRAM_ACCESS_TOKEN"]
+
+    # post_info
+    INSTAGRAM_SENSOR_ID = os.environ["INSTAGRAM_SENSOR_ID"]
+    INSTAGRAM_CAMERA_ID = os.environ["INSTAGRAM_CAMERA_ID"]
+    INSTAGRAM_PLANT_POSITION_PROMPT = os.environ["INSTAGRAM_PLANT_POSITION_PROMPT"]
+except KeyError as e:
+    exit(f"Please set {e} in .env file")
+
 # MQTT settings
 try:
     MQTT_BROKER_URL = os.environ["MQTT_BROKER_URL"]
