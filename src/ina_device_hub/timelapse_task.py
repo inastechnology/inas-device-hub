@@ -45,7 +45,7 @@ class TimelapseTask:
                 continue
 
             camera_type = info.get("type", "unknown")
-            if camera_type == "INACD":
+            if camera_type == "RTSP":
                 img_bytes = camera.take_picture(sensor_id)
                 if img_bytes:
                     is_on, confidence = ImageUtils.is_led_on_with_confidence(img_bytes)
