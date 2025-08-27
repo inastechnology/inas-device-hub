@@ -9,11 +9,13 @@ from plotly import graph_objs as go
 from plotly.offline import plot
 from plotly.subplots import make_subplots
 from tqdm import tqdm
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFile
 import textwrap
 import emoji
 
 from ina_device_hub.general_log import logger
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class Utils:
@@ -300,7 +302,7 @@ class Utils:
         box_margin_w = int(width * 0.05)
         box_width = width - box_margin_w * 2
         box_height = int(height * 0.3)
-        box_bottom = height - int(height * 0.03)
+        box_bottom = height - int(height * 0.02)
 
         font_main, lines = Utils.fit_text_to_box(draw, text, box_width - 40, max_lines=2, font_path=font_main_path)
 

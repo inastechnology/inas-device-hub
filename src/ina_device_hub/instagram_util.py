@@ -53,7 +53,7 @@ class InstagramUtil:
         image_bytes を一旦S3にアップロードして署名付きURLを生成し、
         そのURLを使って投稿する。
         """
-        image_key = storage_connector().save_to_cloud_as_tmp(self.ig_user_id_hash, image_bytes, content_type="image/jpeg")
+        image_key = storage_connector().save_to_cloud_as_tmp(f"tmp/instagram/{self.ig_user_id_hash}", image_bytes, content_type="image/jpeg")
         image_url = os.path.join(self.tmp_storage_base_url, image_key)
         if not image_url:
             raise RuntimeError("Failed to upload image to cloud storage")
@@ -71,14 +71,14 @@ class InstagramUtil:
         video_bytes を一旦S3にアップロードして署名付きURLを生成し、
         そのURLを使って投稿する。
         cover_bytes でサムネイル指定可。"""
-        video_key = storage_connector().save_to_cloud_as_tmp(self.ig_user_id_hash, video_bytes, content_type="video/mp4")
+        video_key = storage_connector().save_to_cloud_as_tmp(f"tmp/instagram/{self.ig_user_id_hash}", video_bytes, content_type="video/mp4")
         video_url = os.path.join(self.tmp_storage_base_url, video_key)
         if not video_url:
             raise RuntimeError("Failed to upload video to cloud storage")
 
         cover_url = None
         if cover_bytes:
-            cover_key = storage_connector().save_to_cloud_as_tmp(self.ig_user_id_hash, cover_bytes, content_type="image/jpeg")
+            cover_key = storage_connector().save_to_cloud_as_tmp(f"tmp/instagram/{self.ig_user_id_hash}", cover_bytes, content_type="image/jpeg")
             cover_url = os.path.join(self.tmp_storage_base_url, cover_key)
 
         return self.post_reel(
@@ -98,7 +98,7 @@ class InstagramUtil:
         container_ids = []
         for content_bytes, content_type in content_list:
             if content_type == "image":
-                image_key = storage_connector().save_to_cloud_as_tmp(self.ig_user_id_hash, content_bytes, content_type="image/jpeg")
+                image_key = storage_connector().save_to_cloud_as_tmp(f"tmp/instagram/{self.ig_user_id_hash}", content_bytes, content_type="image/jpeg")
                 image_url = os.path.join(self.tmp_storage_base_url, image_key)
                 if not image_url:
                     raise RuntimeError("Failed to upload image to cloud storage")
@@ -127,7 +127,7 @@ class InstagramUtil:
                 # コンテナIDをリストに追加
                 container_ids.append(container_id)
             elif content_type == "video":
-                video_key = storage_connector().save_to_cloud_as_tmp(self.ig_user_id_hash, content_bytes, content_type="video/mp4")
+                video_key = storage_connector().save_to_cloud_as_tmp(f"tmp/instagram/{self.ig_user_id_hash}", content_bytes, content_type="video/mp4")
                 video_url = os.path.join(self.tmp_storage_base_url, video_key)
                 if not video_url:
                     raise RuntimeError("Failed to upload video to cloud storage")
@@ -259,11 +259,24 @@ class InstagramUtil:
         3. 公開
         成功すれば公開済みメディア ID を返す。
         """
-        creation_id = self._create_container(create_params)
-        logger.info(f"Waiting for media container {creation_id} to finish...")
-        self._wait_until_finished(creation_id, timeout, interval)
-        time.sleep(1)
-        return self._publish_container(creation_id)
+        retry = 0
+        retry_limit = 3
+        while retry < retry_limit:
+            try:
+                creation_id = self._create_container(create_params)
+                logger.info(f"Waiting for media container {creation_id} to finish...")
+                self._wait_until_finished(creation_id, timeout, interval)
+                time.sleep(1)
+                return self._publish_container(creation_id)
+            except Exception as e:
+                logger.error(f"Error posting media: {e}")
+                retry += 1
+                if retry >= retry_limit:
+                    raise RuntimeError("Failed to post media after multiple attempts")
+                logger.warning(f"Retrying to post media ({retry}/{retry_limit})")
+                time.sleep(retry * 2 + 1)  # Exponential backoff
+
+        raise RuntimeError("Failed to post media after retries")
 
     def _create_container(self, params: Mapping[str, Any]) -> str:
         logger.info(f"Creating media container with params: {json.dumps(params, indent=2, ensure_ascii=False)}")

@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta, timezone
 from ina_device_hub.general_log import logger
 from ina_device_hub.ina_db_connector import ina_db_connector
 from ina_device_hub.setting import setting
-import ast
 
 
 class SensorDataRepository:

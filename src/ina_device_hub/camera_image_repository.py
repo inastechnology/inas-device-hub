@@ -15,6 +15,18 @@ class CameraImageRepository:
         img_key = self.get_img_key(camera_id)
         self.storage_connector.save_to_cloud(img_key, img_bytes)
 
+    def delete_from_cloud(self, img_key):
+        try:
+            self.storage_connector.remove_from_cloud(img_key)
+        except Exception as e:
+            logger.error(f"Error deleting image {img_key}: {e}")
+
+    def delete_from_cloud_tmp(self, img_key):
+        try:
+            self.storage_connector.remove_from_cloud(img_key, tmp=True)
+        except Exception as e:
+            logger.error(f"Error deleting temporary image {img_key}: {e}")
+
     def get_by_id(self, camera_id, limit=10):
         img_key = self.get_img_key(camera_id)
         images = self.storage_connector.fetch_files(img_key, limit)

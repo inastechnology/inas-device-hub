@@ -79,7 +79,7 @@ class StorageConnector:
         Automatically generates the file path based on the file key and the current date and time(UTC).
         e.g.) file path: tmp/{tenant_id}/{file_key}/{yyyymmdd}/{yyyymmdd_hhmmss}.jpg
         """
-        file_path = os.path.join("tmp", self.get_file_path(file_key))
+        file_path = self.get_file_path(file_key)
         # content_type によって拡張子を変更
         if content_type == "image/jpeg":
             # jpeg の場合は .jpg なので何もしない
@@ -125,6 +125,50 @@ class StorageConnector:
             f.write(file_bytes)
 
         return file_path
+
+    def remove_from_cloud(self, file_key):
+        """
+        Removes the file from cloud storage.
+        Automatically generates the file path based on the file key and the current date and time(UTC).
+        e.g.) file path: {tenant_id}/{file_key}/{yyyymmdd}/{yyyymmdd_hhmmss}.jpg
+        """
+        try:
+            self.s3.delete_object(Bucket=setting().get("storage_bucket").get("bucket_name"), Key=file_key)
+            logger.info(f"File deleted from cloud: {file_key}")
+        except Exception as e:
+            logger.exception(f"Error: {e}")
+            return None
+        return file_key
+
+    def remove_from_cloud_as_tmp(self, file_key):
+        """
+        Removes the file from cloud storage.
+        Automatically generates the file path based on the file key and the current date and time(UTC).
+        e.g.) file path: tmp/{tenant_id}/{file_key}/{yyyymmdd}/{yyyymmdd_hhmmss}.jpg
+        """
+        try:
+            self.s3_tmp.delete_object(Bucket=setting().get("storage_bucket").get("bucket_name") + "-tmp", Key=file_key)
+            logger.info(f"File deleted from cloud: {file_key}")
+        except Exception as e:
+            logger.exception(f"Error: {e}")
+            return None
+        return file_key
+
+    def fetch_files_from_cloud_as_tmp(self, file_full_key):
+        """
+        Fetches the file from cloud storage as bytes.
+        Automatically generates the file path based on the file key and the current date and time(UTC).
+        e.g.) file path: tmp/{tenant_id}/{file_key}/{yyyymmdd}/{yyyymmdd_hhmmss}.jpg
+        """
+        try:
+            response = self.s3_tmp.get_object(
+                Bucket=setting().get("storage_bucket").get("bucket_name") + "-tmp",
+                Key=file_full_key,
+            )
+            return response["Body"].read()
+        except Exception as e:
+            logger.exception(f"Error: {e}")
+            return None
 
     def fetch_from_cloud_as_bytes(self, file_full_key):
         try:
@@ -186,6 +230,26 @@ class StorageConnector:
                 except Exception as e:
                     logger.exception(f"Error: {e}")
             images.sort(key=lambda x: x.get("key"))
+            return images
+        except Exception as e:
+            logger.exception(f"Error: {e}")
+            return None
+
+    def fetch_files_as_tmp(self, prefix, limit=1):
+        """
+        Fetches the files from cloud storage as bytes.
+        Automatically generates the prefix based on the file key and the date.
+        e.g.) prefix: tmp/{tenant_id}/{file_key}/{yyyymmdd}
+        """
+        try:
+            images = []
+            response = self.s3_tmp.list_objects_v2(
+                Bucket=setting().get("storage_bucket").get("bucket_name") + "-tmp",
+                Prefix=self.get_prefix(prefix),
+                MaxKeys=limit,
+            )
+            for content in response.get("Contents", []):
+                images.append(content.get("Key"))
             return images
         except Exception as e:
             logger.exception(f"Error: {e}")
