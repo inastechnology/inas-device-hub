@@ -1,15 +1,10 @@
-# ina-device-hub
+# Ina Device Hub
 
-Ina deivice hub is a project to manage the sensor devices in a network. We get the data, such as temperature, tds, ph, camera images, etc., from the devices and store them in the database. 
+Ina Device Hub manages network-connected sensor devices. It collects data such as temperature, TDS, pH and camera images and stores them in the database.
 
+## Setup
 
-## setup 
-
-This project is managed by rye. To install rye
-
-[Rye Installation](https://rye.astral.sh/guide/installation/)
-
-And then run the following command to sync the project
+This project is managed by [Rye](https://rye.astral.sh/guide/installation/). After installing Rye, sync the environment:
 
 ```bash
 rye sync
@@ -17,7 +12,7 @@ rye sync
 
 ### Environment Variables
 
-The environment variables are stored in the `.env` file. You can copy the `.default.env` file to `.env` and update the values.
+Copy `.default.env` to `.env` and update the values for your environment.
 
 ```bash
 cp .default.env .env
@@ -25,7 +20,7 @@ cp .default.env .env
 
 ### Database
 
-The project uses TursoDB as the database. You can create the database by running the following command.
+The project uses TursoDB. Create the database with:
 
 ```bash
 rye run db:create
@@ -37,22 +32,18 @@ TODO: Add migration instructions
 
 ### Run
 
-We can run the project using the following command.
+Start the backend and frontend servers:
 
 ```bash
 rye run backend
 rye run frontend
 ```
 
-And the project will be running on `http://localhost:5151`
+The application will be available at `http://localhost:5151`.
 
 ### systemd
 
-you can use the following systemd service file to run the project automatically on boot.
-
-> [!IMPORTANT]
-> Make sure to update the `WorkingDirectory` and `ExecStart` and `User` values in the service file.
-> you should change the "/home/inas-usr/ina-device-hub" to the path of the project.
+You can use the provided systemd service file to run the project automatically on boot. Update `WorkingDirectory`, `ExecStart` and `User` to match your environment.
 
 ```bash
 sudo cp ./systemd/inas-device-hub@.service /etc/systemd/system/
@@ -63,5 +54,4 @@ sudo systemctl enable inas-device-hub@frontend
 sudo systemctl start inas-device-hub@frontend
 ```
 
-enjoy!
-
+Enjoy!
