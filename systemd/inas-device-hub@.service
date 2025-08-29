@@ -1,0 +1,13 @@
+[Unit]
+Description=INAS Device Hub Service for %I
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/work/garden/inas-device-hub
+ExecStart=/home/pi/work/garden/inas-device-hub/start.sh %I
+Environment=PYTHONUNBUFFERED=1
+User=pi
+
+[Install]
+WantedBy=multi-user.target
