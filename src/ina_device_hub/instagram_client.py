@@ -71,9 +71,7 @@ class InstagramClient:
         for retry in range(1, self.retry_limit + 1):
             try:
                 creation_id = self._create_container(create_params)
-                logger.info(
-                    f"Waiting for media container {creation_id} to finish"
-                )
+                logger.info(f"Waiting for media container {creation_id} to finish")
                 self._wait_until_finished(
                     creation_id,
                     timeout=timeout,
@@ -88,8 +86,7 @@ class InstagramClient:
                         "Failed to post media after multiple attempts"
                     ) from exc
                 logger.warning(
-                    "Retrying Instagram media post "
-                    f"({retry}/{self.retry_limit})"
+                    "Retrying Instagram media post " f"({retry}/{self.retry_limit})"
                 )
                 time.sleep(retry * 2 + 1)
 
@@ -106,9 +103,7 @@ class InstagramClient:
             raise RuntimeError("Instagram media container was not created")
         return creation_id
 
-    def _wait_until_finished(
-        self, creation_id: str, timeout: int, interval: int
-    ):
+    def _wait_until_finished(self, creation_id: str, timeout: int, interval: int):
         started_at = time.time()
         poll_count = 0
         while True:
@@ -118,16 +113,12 @@ class InstagramClient:
             )
             status_code = response.get("status_code")
             if status_code == "FINISHED":
-                logger.info(
-                    f"Instagram media container is ready: {creation_id}"
-                )
+                logger.info(f"Instagram media container is ready: {creation_id}")
                 return
             if status_code in {"ERROR", "EXPIRED"}:
                 raise RuntimeError(json.dumps(response))
             if time.time() - started_at > timeout:
-                raise TimeoutError(
-                    "Instagram media container did not finish in time"
-                )
+                raise TimeoutError("Instagram media container did not finish in time")
             poll_count += 1
             logger.info(
                 f"Polling Instagram container {creation_id}: "

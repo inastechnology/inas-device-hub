@@ -82,16 +82,12 @@ class TimelapseMediaService:
         output_relative_path = self.get_video_relative_path(
             device_id, end_at or datetime.now()
         )
-        output_path = os.path.join(
-            self.local_storage_base_dir, output_relative_path
-        )
+        output_path = os.path.join(self.local_storage_base_dir, output_relative_path)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with tempfile.TemporaryDirectory(prefix="timelapse-") as staging_dir:
             for index, frame_path in enumerate(frame_paths, start=1):
-                staged_path = os.path.join(
-                    staging_dir, f"frame_{index:06d}.jpg"
-                )
+                staged_path = os.path.join(staging_dir, f"frame_{index:06d}.jpg")
                 shutil.copyfile(frame_path, staged_path)
 
             input_pattern = os.path.join(staging_dir, "frame_%06d.jpg")

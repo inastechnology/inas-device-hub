@@ -63,9 +63,7 @@ class StorageConnector:
         file_path = self.get_file_path(file_key)
         return self.save_bytes_to_cloud(file_path, fileBytes, content_type)
 
-    def save_bytes_to_cloud(
-        self, file_path, fileBytes, content_type="image/jpeg"
-    ):
+    def save_bytes_to_cloud(self, file_path, fileBytes, content_type="image/jpeg"):
         try:
             self._put_object(
                 self.s3,
@@ -74,9 +72,7 @@ class StorageConnector:
                 fileBytes,
                 content_type,
             )
-            logger.info(
-                f"Image uploaded to {file_path}({len(fileBytes)} bytes)"
-            )
+            logger.info(f"Image uploaded to {file_path}({len(fileBytes)} bytes)")
         except Exception as e:
             print(f"Error: {e}")
             return None
@@ -88,9 +84,7 @@ class StorageConnector:
         if self.tmp_s3 is None:
             raise ValueError("temporary storage bucket is not configured")
 
-        bucket_name = setting().get("temporary_storage_bucket").get(
-            "bucket_name"
-        )
+        bucket_name = setting().get("temporary_storage_bucket").get("bucket_name")
         try:
             self._put_object(
                 self.tmp_s3,
@@ -100,17 +94,14 @@ class StorageConnector:
                 content_type,
             )
             logger.info(
-                f"Temporary object uploaded to {file_path}"
-                f"({len(fileBytes)} bytes)"
+                f"Temporary object uploaded to {file_path}" f"({len(fileBytes)} bytes)"
             )
         except Exception as e:
             print(f"Error: {e}")
             return None
         return file_path
 
-    def _put_object(
-        self, client, bucket_name, file_path, fileBytes, content_type
-    ):
+    def _put_object(self, client, bucket_name, file_path, fileBytes, content_type):
         # TODO: [Multi-tenancy] Generate the bucket name from tenant_id.
         client.put_object(
             Bucket=bucket_name,
@@ -168,15 +159,11 @@ class StorageConnector:
         return bool(self.tmp_s3 and tmp_bucket.get("base_url"))
 
     def get_temporary_public_url(self, file_path: str):
-        base_url = setting().get("temporary_storage_bucket").get(
-            "base_url", ""
-        )
+        base_url = setting().get("temporary_storage_bucket").get("base_url", "")
         if not base_url:
             return None
         normalized_base = base_url.rstrip("/")
-        normalized_path = "/".join(
-            quote(part) for part in file_path.split(os.sep)
-        )
+        normalized_path = "/".join(quote(part) for part in file_path.split(os.sep))
         return f"{normalized_base}/{normalized_path}"
 
 

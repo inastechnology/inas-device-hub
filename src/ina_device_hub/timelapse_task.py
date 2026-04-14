@@ -27,12 +27,9 @@ class TimelapseTask:
             max_instances=1,
         )
         logger.info(
-            f"Start {self.__class__.__name__}"
-            f"(interval: {self.TIMELAPSE_INTERVAL})"
+            f"Start {self.__class__.__name__}" f"(interval: {self.TIMELAPSE_INTERVAL})"
         )
-        self.worker_thread = threading.Thread(
-            target=self.routin_scheduler.start
-        )
+        self.worker_thread = threading.Thread(target=self.routin_scheduler.start)
         self.worker_thread.daemon = True
         self.worker_thread.start()
 

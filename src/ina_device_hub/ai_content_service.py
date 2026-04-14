@@ -131,10 +131,7 @@ class AIContentService:
         if not api_key or not model:
             raise RuntimeError("AI settings are incomplete")
 
-        url = (
-            f"{(base_url or self.DEFAULT_BASE_URL).rstrip('/')}"
-            "/chat/completions"
-        )
+        url = f"{(base_url or self.DEFAULT_BASE_URL).rstrip('/')}" "/chat/completions"
         payload = json.dumps(
             {
                 "model": model,
@@ -171,9 +168,7 @@ class AIContentService:
             return content
         if isinstance(content, list):
             return "\n".join(
-                item.get("text", "")
-                for item in content
-                if item.get("type") == "text"
+                item.get("text", "") for item in content if item.get("type") == "text"
             )
         return ""
 

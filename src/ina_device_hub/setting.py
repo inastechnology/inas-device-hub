@@ -87,20 +87,12 @@ INSTAGRAM_PLANT_POSITION_PROMPT = os.environ.get(
 ).strip()
 
 AI_ENABLED = bool("true" == os.environ.get("AI_ENABLED", "false").lower())
-AI_AGENT_SCHEDULE_START = os.environ.get(
-    "AI_AGENT_SCHEDULE_START", "09:01"
-).strip()
-AI_IMAGE_ANALYZE_API_KEY = os.environ.get(
-    "AI_IMAGE_ANALYZE_API_KEY", ""
-).strip()
-AI_IMAGE_ANALYZE_BASE_URL = os.environ.get(
-    "AI_IMAGE_ANALYZE_BASE_URL", ""
-).strip()
+AI_AGENT_SCHEDULE_START = os.environ.get("AI_AGENT_SCHEDULE_START", "09:01").strip()
+AI_IMAGE_ANALYZE_API_KEY = os.environ.get("AI_IMAGE_ANALYZE_API_KEY", "").strip()
+AI_IMAGE_ANALYZE_BASE_URL = os.environ.get("AI_IMAGE_ANALYZE_BASE_URL", "").strip()
 AI_IMAGE_ANALYZE_MODEL = os.environ.get("AI_IMAGE_ANALYZE_MODEL", "").strip()
 AI_TEXT_ANALYZE_API_KEY = os.environ.get("AI_TEXT_ANALYZE_API_KEY", "").strip()
-AI_TEXT_ANALYZE_BASE_URL = os.environ.get(
-    "AI_TEXT_ANALYZE_BASE_URL", ""
-).strip()
+AI_TEXT_ANALYZE_BASE_URL = os.environ.get("AI_TEXT_ANALYZE_BASE_URL", "").strip()
 AI_TEXT_ANALYZE_MODEL = os.environ.get("AI_TEXT_ANALYZE_MODEL", "").strip()
 
 DEVICE_CONFIG_DEFAULT_NTP_SERVER = os.environ.get(

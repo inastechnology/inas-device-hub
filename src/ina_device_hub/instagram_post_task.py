@@ -46,8 +46,7 @@ class InstagramPostTask:
             max_instances=1,
         )
         logger.info(
-            f"Start {self.__class__.__name__}"
-            f"(schedule: {hour:02d}:{minute:02d})"
+            f"Start {self.__class__.__name__}" f"(schedule: {hour:02d}:{minute:02d})"
         )
         worker_thread = threading.Thread(target=self.scheduler.start)
         worker_thread.daemon = True
@@ -65,8 +64,7 @@ class InstagramPostTask:
             return False
         if not self.storage_connector.is_temporary_storage_configured():
             logger.warning(
-                "Temporary storage is not configured; "
-                "skip Instagram posting"
+                "Temporary storage is not configured; " "skip Instagram posting"
             )
             return False
         return True
@@ -89,8 +87,7 @@ class InstagramPostTask:
         )
         if not video_path:
             logger.info(
-                "Skip Instagram post because no timelapse is available: "
-                f"{camera_id}"
+                "Skip Instagram post because no timelapse is available: " f"{camera_id}"
             )
             return
 
@@ -101,8 +98,7 @@ class InstagramPostTask:
         )
         image_paths = self._select_key_frames(frame_paths)
         image_urls = [
-            self._upload_public_asset(image_path)
-            for image_path in image_paths
+            self._upload_public_asset(image_path) for image_path in image_paths
         ]
         image_urls = [image_url for image_url in image_urls if image_url]
 
@@ -119,9 +115,7 @@ class InstagramPostTask:
             image_urls=image_urls,
             video_url=video_url,
         )
-        caption = self.ai_content_service.generate_instagram_caption(
-            media_context
-        )
+        caption = self.ai_content_service.generate_instagram_caption(media_context)
         instagram_client = InstagramClient(
             self.instagram_settings.get("user_id"),
             self.instagram_settings.get("access_token"),
@@ -190,10 +184,7 @@ class InstagramPostTask:
         )
         with open(local_path, "rb") as file:
             file_bytes = file.read()
-        content_type = (
-            mimetypes.guess_type(local_path)[0]
-            or "application/octet-stream"
-        )
+        content_type = mimetypes.guess_type(local_path)[0] or "application/octet-stream"
         uploaded_key = self.storage_connector.save_bytes_to_temporary_cloud(
             relative_key,
             file_bytes,
