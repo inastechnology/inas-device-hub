@@ -11,6 +11,7 @@ ina-device-hub は、MQTT で受信したセンサーデータやカメラ画像
 - 画像／音声のローカル保存と S3 互換ストレージへのアップロード
 - ローカル DB（Turso/libsql）との統合
 - タイムラプス生成・スケジューリング（APScheduler）
+- タイムラプス画像からの mp4 生成と Instagram Reel 自動投稿
 - 簡易 Web 表示（Flask）
 
 クイックスタート
@@ -113,6 +114,30 @@ rye run lint
 - MQTT_BROKER_URL, MQTT_BROKER_PORT, MQTT_BROKER_USERNAME, MQTT_BROKER_PASSWORD
 - TIMELAPSE_INTERVAL
 - DEVICE_CONFIG_DEFAULT_NTP_SERVER, DEVICE_CONFIG_DEFAULT_TIMEZONE_OFFSET_SEC, DEVICE_CONFIG_DEFAULT_MOISTURE_THRESHOLD
+
+Instagram 自動投稿を使う場合は、追加で次を設定してください。
+
+- S3_TMP_ENDPOINT_URL, S3_TMP_BUCKET_NAME, S3_TMP_BUCKET_REGION, S3_TMP_ACCESS_KEY, S3_TMP_SECRET_KEY
+- S3_TMP_BASE_URL
+- INSTAGRAM_USER_ID, INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_CAMERA_ID
+- INSTAGRAM_SENSOR_ID, INSTAGRAM_PLANT_POSITION_PROMPT
+- AI_ENABLED, AI_AGENT_SCHEDULE_START
+- AI_IMAGE_ANALYZE_API_KEY, AI_IMAGE_ANALYZE_BASE_URL, AI_IMAGE_ANALYZE_MODEL
+- AI_TEXT_ANALYZE_API_KEY, AI_TEXT_ANALYZE_BASE_URL, AI_TEXT_ANALYZE_MODEL
+
+Instagram 自動投稿フロー
+
+- `TIMELAPSE_INTERVAL` ごとに RTSP から静止画を取得し、S3 とローカルの `timelapse_frames/` に保存します。
+- `AI_AGENT_SCHEDULE_START` の時刻になると、前回投稿以降の静止画から mp4 を生成します。
+- 生成した動画と代表画像を `S3_TMP_*` にアップロードし、公開 URL を作成します。
+- AI に代表画像、タイムラプス動画 URL、センサースナップショット、`INSTAGRAM_PLANT_POSITION_PROMPT` を渡して投稿文を生成します。
+- Instagram Graph API を使って Reel を投稿します。
+
+注意:
+
+- Instagram 投稿には公開アクセス可能な `S3_TMP_BASE_URL` が必要です。非公開バケット URL では投稿できません。
+- `INSTAGRAM_CAMERA_ID` は `.camera_device_list.json` に登録済みのカメラ ID を指定してください。
+- `INSTAGRAM_SENSOR_ID` を設定すると、最新センサーデータを投稿文生成に含めます。
 
 貢献
 

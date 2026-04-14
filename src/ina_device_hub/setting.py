@@ -48,6 +48,13 @@ try:
 except KeyError as e:
     sys.exit(f"Please set {e} in .env file")
 
+S3_TMP_ENDPOINT_URL = os.environ.get("S3_TMP_ENDPOINT_URL", "").strip()
+S3_TMP_BUCKET_NAME = os.environ.get("S3_TMP_BUCKET_NAME", "").strip()
+S3_TMP_BUCKET_REGION = os.environ.get("S3_TMP_BUCKET_REGION", "").strip()
+S3_TMP_ACCESS_KEY = os.environ.get("S3_TMP_ACCESS_KEY", "").strip()
+S3_TMP_SECRET_KEY = os.environ.get("S3_TMP_SECRET_KEY", "").strip()
+S3_TMP_BASE_URL = os.environ.get("S3_TMP_BASE_URL", "").strip()
+
 # MQTT settings
 try:
     MQTT_BROKER_URL = os.environ["MQTT_BROKER_URL"]
@@ -70,6 +77,31 @@ try:
     TIMELAPSE_INTERVAL = int(os.environ["TIMELAPSE_INTERVAL"])
 except KeyError:
     sys.exit("Please set TIMELAPSE_INTERVAL in .env file")
+
+INSTAGRAM_USER_ID = os.environ.get("INSTAGRAM_USER_ID", "").strip()
+INSTAGRAM_ACCESS_TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
+INSTAGRAM_SENSOR_ID = os.environ.get("INSTAGRAM_SENSOR_ID", "").strip()
+INSTAGRAM_CAMERA_ID = os.environ.get("INSTAGRAM_CAMERA_ID", "").strip()
+INSTAGRAM_PLANT_POSITION_PROMPT = os.environ.get(
+    "INSTAGRAM_PLANT_POSITION_PROMPT", ""
+).strip()
+
+AI_ENABLED = bool("true" == os.environ.get("AI_ENABLED", "false").lower())
+AI_AGENT_SCHEDULE_START = os.environ.get(
+    "AI_AGENT_SCHEDULE_START", "09:01"
+).strip()
+AI_IMAGE_ANALYZE_API_KEY = os.environ.get(
+    "AI_IMAGE_ANALYZE_API_KEY", ""
+).strip()
+AI_IMAGE_ANALYZE_BASE_URL = os.environ.get(
+    "AI_IMAGE_ANALYZE_BASE_URL", ""
+).strip()
+AI_IMAGE_ANALYZE_MODEL = os.environ.get("AI_IMAGE_ANALYZE_MODEL", "").strip()
+AI_TEXT_ANALYZE_API_KEY = os.environ.get("AI_TEXT_ANALYZE_API_KEY", "").strip()
+AI_TEXT_ANALYZE_BASE_URL = os.environ.get(
+    "AI_TEXT_ANALYZE_BASE_URL", ""
+).strip()
+AI_TEXT_ANALYZE_MODEL = os.environ.get("AI_TEXT_ANALYZE_MODEL", "").strip()
 
 DEVICE_CONFIG_DEFAULT_NTP_SERVER = os.environ.get(
     "DEVICE_CONFIG_DEFAULT_NTP_SERVER", DEVICE_NAME
@@ -112,14 +144,39 @@ DEFAULT_SETTINGS = {
         "access_key": S3_ACCESS_KEY,
         "secret_key": S3_SECRET_KEY,
     },
+    "temporary_storage_bucket": {
+        "endpoint_url": S3_TMP_ENDPOINT_URL,
+        "bucket_name": S3_TMP_BUCKET_NAME,
+        "region": S3_TMP_BUCKET_REGION,
+        "access_key": S3_TMP_ACCESS_KEY,
+        "secret_key": S3_TMP_SECRET_KEY,
+        "base_url": S3_TMP_BASE_URL,
+    },
     "local_storage_base_dir": LOCAL_STORAGE_BASE_DIR,
     "timelapse_interval": TIMELAPSE_INTERVAL,
+    "instagram": {
+        "user_id": INSTAGRAM_USER_ID,
+        "access_token": INSTAGRAM_ACCESS_TOKEN,
+        "sensor_id": INSTAGRAM_SENSOR_ID,
+        "camera_id": INSTAGRAM_CAMERA_ID,
+        "plant_position_prompt": INSTAGRAM_PLANT_POSITION_PROMPT,
+    },
     "mqtt": {
         "mqtt_broker": MQTT_BROKER_URL,
         "mqtt_port": MQTT_BROKER_PORT,
         "mqtt_client_id": DEVICE_NAME,
         "mqtt_username": MQTT_BROKER_USERNAME,
         "mqtt_password": MQTT_BROKER_PASSWORD,
+    },
+    "ai": {
+        "enabled": AI_ENABLED,
+        "agent_schedule_start": AI_AGENT_SCHEDULE_START,
+        "image_analyze_api_key": AI_IMAGE_ANALYZE_API_KEY,
+        "image_analyze_base_url": AI_IMAGE_ANALYZE_BASE_URL,
+        "image_analyze_model": AI_IMAGE_ANALYZE_MODEL,
+        "text_analyze_api_key": AI_TEXT_ANALYZE_API_KEY,
+        "text_analyze_base_url": AI_TEXT_ANALYZE_BASE_URL,
+        "text_analyze_model": AI_TEXT_ANALYZE_MODEL,
     },
     "sensor": {
         "save_image": SENSOR_SAVE_IMAGE,

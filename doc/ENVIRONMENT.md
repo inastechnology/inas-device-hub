@@ -46,12 +46,17 @@ chmod 600 .env
 
 用途によりメインと分けることで、本番バケットへの不要な負荷を避けられます。
 
+Instagram 自動投稿では、この一時ストレージを公開 URL 配信用に使います。`S3_TMP_BASE_URL` は CDN や公開配信ドメインを設定してください。Meta の Graph API に渡す動画 URL と画像 URL は外部から取得可能である必要があります。
+
 ## Instagram 関連（任意）
 
 - `INSTAGRAM_USER_ID` — Instagram のユーザー ID（数値）。
 - `INSTAGRAM_ACCESS_TOKEN` — Instagram Graph API のアクセストークン。
-- `INSTAGRAM_SENSOR_ID`, `INSTAGRAM_CAMERA_ID` — プロジェクト内での識別子（任意、運用次第）。
+- `INSTAGRAM_SENSOR_ID` — 投稿文生成時に参照するセンサーデバイス ID（任意）。
+- `INSTAGRAM_CAMERA_ID` — タイムラプス元のカメラデバイス ID。自動投稿を使う場合は必須です。
 - `INSTAGRAM_PLANT_POSITION_PROMPT` — Instagram 投稿の位置情報や解析プロンプト（任意）。
+
+現在の実装では、`AI_AGENT_SCHEDULE_START` の時刻に前回投稿以降のフレームからタイムラプス動画を作り、`INSTAGRAM_CAMERA_ID` の代表画像とあわせて投稿文を生成し、Instagram Reel として投稿します。
 
 取得方法: Facebook (Meta) の Graph API を使い、Instagram Business/Creator アカウントをアプリに接続してアクセストークンを取得します（permissions: instagram_basic, instagram_content_publish 等が関係します）。Instagram のトークン管理はやや複雑なので公式ドキュメントを参照してください。
 
@@ -80,10 +85,13 @@ chmod 600 .env
 ## AI 関連設定
 
 - `AI_ENABLED` (任意) — AI 機能を有効にする場合は `true`。
-- `AI_AGENT_SCHEDULE_START` (任意) — AI エージェントが動作を開始する時刻（例: `09:01`）。
+- `AI_AGENT_SCHEDULE_START` (任意) — AI エージェントが動作を開始する時刻（例: `09:01`）。日次の Instagram 投稿ジョブ時刻として使われます。
 - `AI_IMAGE_ANALYZE_API_KEY` — 画像解析用 API キー（例: OpenAI, DeepSeek などのキー）。
+- `AI_IMAGE_ANALYZE_BASE_URL` — 画像解析 API のベース URL。未設定時は OpenAI 互換の既定 URL を使います。
 - `AI_IMAGE_ANALYZE_MODEL` — 画像解析で使うモデル名（例: `gpt-4o` 等）。
 - `AI_TEXT_ANALYZE_API_KEY`, `AI_TEXT_ANALYZE_BASE_URL`, `AI_TEXT_ANALYZE_MODEL` — テキスト解析用の API キー・エンドポイント・モデル。
+
+現在の実装では、画像解析モデルに代表画像とタイムラプス動画 URL を渡して観察メモを作成し、その結果とセンサーデータをもとにテキストモデルで Instagram 投稿文を生成します。
 
 注意: どの AI サービスを使うかによりキーやベース URL の取得方法が異なります（OpenAI の API キー、DeepSeek の API キー等）。各サービスの管理画面で発行してください。
 
