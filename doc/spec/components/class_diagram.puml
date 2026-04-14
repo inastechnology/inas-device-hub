@@ -111,7 +111,7 @@ WebServer --> SensorDataRepository : reads
 WebServer --> SensorImageRepogitory : fetch_latest
 WebServer --> Utils : generate graphs
 
-InaDBConnector ..> "libsql_experimental (external)" : connects
+InaDBConnector ..> "libsql (external)" : connects
 StorageConnector ..> "boto3/S3 (external)" : uses
 
 @enduml

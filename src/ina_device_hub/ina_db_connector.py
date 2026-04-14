@@ -5,9 +5,10 @@
 # - センサーデータをデータベースに保存する
 # - センサーデータをデータベースから取得する
 
-from datetime import datetime, timezone
 import json
-import libsql_experimental as libsql
+from datetime import UTC, datetime
+
+import libsql
 
 from ina_device_hub.setting import setting
 
@@ -91,8 +92,7 @@ class InaDBConnector:
         デバイスのステータスを登録／更新します。
         """
         self.conn.execute(
-            "INSERT INTO device_status (device_id, status) VALUES (?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET status = excluded.status",
+            "INSERT INTO device_status (device_id, status) VALUES (?, ?) ON CONFLICT(device_id) DO UPDATE SET status = excluded.status",
             (device_id, status),
         )
 
@@ -129,16 +129,14 @@ class InaDBConnector:
         )
 
     @commit_and_sync
-    def insert_aggregated_sensor_data(
-        self, device_id: str, yyyymmdd_hh: str, data: dict
-    ):
+    def insert_aggregated_sensor_data(self, device_id: str, yyyymmdd_hh: str, data: dict):
         """
         集計済センサーデータ（拡張版）を登録します。複合キー（device_id, yyyymmddhh）。
         """
         self.conn.execute(
             "INSERT INTO aggregated_sensor_data (device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
             "VALUES ("
-            f"\"{device_id}\", {round(data.get('temp', -1000.0), 2)}, {round(data.get('tds', -1000.0), 2)}, "
+            f'"{device_id}", {round(data.get("temp", -1000.0), 2)}, {round(data.get("tds", -1000.0), 2)}, '
             f"{round(data.get('ec', -1000.0), 2)}, {round(data.get('ph', -1000.0), 2)}, "
             f"{round(data.get('dissolved_oxygen', -1000.0), 2)}, "
             f"{round(data.get('ammonia', -1000.0), 2)}, {round(data.get('nitrate', -1000.0), 2)}, "
@@ -150,9 +148,7 @@ class InaDBConnector:
         """
         最新センサーデータを取得します。
         """
-        return self.conn.execute(
-            "SELECT * FROM latest_sensor_data WHERE device_id = ?", (device_id,)
-        ).fetchone()
+        return self.conn.execute("SELECT * FROM latest_sensor_data WHERE device_id = ?", (device_id,)).fetchone()
 
     def fetch_latest_aggregated_sensor_data(self, device_id: str, limit: int = 50):
         """
@@ -163,9 +159,7 @@ class InaDBConnector:
             (device_id, limit),
         ).fetchall()
 
-    def fetch_aggregated_sensor_data_by_range(
-        self, device_id: str, start: str, end: str
-    ):
+    def fetch_aggregated_sensor_data_by_range(self, device_id: str, start: str, end: str):
         """
         集計済センサーデータを取得します。
         """
@@ -175,16 +169,11 @@ class InaDBConnector:
         ).fetchall()
 
     @commit_and_sync
-    def insert_sensor_image_data(
-        self, device_id: str, yyyymmddhhmmss: str, image_path: str
-    ):
+    def insert_sensor_image_data(self, device_id: str, yyyymmddhhmmss: str, image_path: str):
         """
         センサー画像データを登録します。
         """
-        self.conn.execute(
-            "INSERT INTO sensor_image_data (device_id, yyyymmddhhmmss, image_path) VALUES "
-            f'("{device_id}", "{yyyymmddhhmmss}", "{image_path}")'
-        )
+        self.conn.execute(f'INSERT INTO sensor_image_data (device_id, yyyymmddhhmmss, image_path) VALUES ("{device_id}", "{yyyymmddhhmmss}", "{image_path}")')
 
     def fetch_sensor_latest_image(self, device_id: str, num: int = 1):
         """
@@ -200,11 +189,7 @@ class InaDBConnector:
         """
         ユーザーノートを登録します。
         """
-        self.conn.execute(
-            "INSERT INTO user_note (device_id, note) VALUES ("
-            f'"{device_id}", "{note}"'
-            ")"
-        )
+        self.conn.execute(f'INSERT INTO user_note (device_id, note) VALUES ("{device_id}", "{note}")')
 
     @commit_and_sync
     def upsert_sensor_info(
@@ -221,7 +206,7 @@ class InaDBConnector:
         self.conn.execute(
             "INSERT INTO sensor_info (sensor_id, device_id, sensor_type, calibration_date, location) "
             "VALUES ("
-            f"\"{sensor_id}\", \"{device_id}\", \"{sensor_type}\", \"{calibration_date.strftime('%Y-%m-%d %H:%M:%S')}\", \"{location}\""
+            f'"{sensor_id}", "{device_id}", "{sensor_type}", "{calibration_date.strftime("%Y-%m-%d %H:%M:%S")}", "{location}"'
             ") "
             "ON CONFLICT(sensor_id) DO UPDATE SET "
             "device_id = excluded.device_id, sensor_type = excluded.sensor_type, "
@@ -243,7 +228,7 @@ class InaDBConnector:
         self.conn.execute(
             "INSERT INTO system_alerts (device_id, alert_type, severity, description, event_timestamp, resolved) "
             "VALUES ("
-            f"\"{device_id}\", \"{alert_type}\", \"{severity}\", \"{description}\", \"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}\", {resolved}"
+            f'"{device_id}", "{alert_type}", "{severity}", "{description}", "{datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")}", {resolved}'
             ")"
         )
 
@@ -259,9 +244,7 @@ class InaDBConnector:
         """
         メンテナンスログ（定期点検、修理履歴等）を登録します。
         """
-        maintenance_date_str_as_utc = maintenance_date.astimezone(
-            timezone.utc
-        ).strftime("%Y-%m-%d %H:%M:%S")
+        maintenance_date_str_as_utc = maintenance_date.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
         self.conn.execute(
             "INSERT INTO maintenance_logs (device_id, maintenance_date, performed_by, description, status) "
             "VALUES ("
@@ -285,7 +268,7 @@ class InaDBConnector:
         self.conn.execute(
             "INSERT INTO plant_growth_data (plant_id, species, growth_stage, last_measurement_date, height, health_status) "
             "VALUES ("
-            f"\"{plant_id}\", \"{species}\", \"{growth_stage}\", \"{last_measurement_date.strftime('%Y-%m-%d %H:%M:%S')}\", {height}, \"{health_status}\""
+            f'"{plant_id}", "{species}", "{growth_stage}", "{last_measurement_date.strftime("%Y-%m-%d %H:%M:%S")}", {height}, "{health_status}"'
             ") "
             "ON CONFLICT(plant_id) DO UPDATE SET "
             "species = excluded.species, growth_stage = excluded.growth_stage, "
@@ -308,7 +291,7 @@ class InaDBConnector:
         self.conn.execute(
             "INSERT INTO fish_tank_info (tank_id, fish_species, stocking_density, water_volume, last_maintenance_date) "
             "VALUES ("
-            f"\"{tank_id}\", \"{fish_species}\", {stocking_density}, {water_volume}, \"{last_maintenance_date.strftime('%Y-%m-%d %H:%M:%S')}\""
+            f'"{tank_id}", "{fish_species}", {stocking_density}, {water_volume}, "{last_maintenance_date.strftime("%Y-%m-%d %H:%M:%S")}"'
             ") "
             "ON CONFLICT(tank_id) DO UPDATE SET "
             "fish_species = excluded.fish_species, stocking_density = excluded.stocking_density, "

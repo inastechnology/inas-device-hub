@@ -2,7 +2,7 @@
 
 ## 目的
 
-- libsql_experimental（Turso）への接続ラッパー。DB への upsert/insert/fetch 操作を提供する。
+- libsql（Turso）への接続ラッパー。DB への upsert/insert/fetch 操作を提供する。
 
 ## 主要 API（抜粋）
 
@@ -26,7 +26,7 @@
 
 ## 依存
 
-- `libsql_experimental`
+- `libsql`
 - `ina_device_hub.setting`
 
 ## 注意点 / 改善案
