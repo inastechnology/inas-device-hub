@@ -1,6 +1,9 @@
 import json
 import os
+import sys
 import uuid
+from functools import lru_cache
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,7 +29,7 @@ try:
     TURSO_DATABASE_URL = os.environ["TURSO_DATABASE_URL"]
     TURSO_AUTH_TOKEN = os.environ["TURSO_AUTH_TOKEN"]
 except KeyError as e:
-    exit(f"Please set {e} in .env file")
+    sys.exit(f"Please set {e} in .env file")
 
 try:
     LOCAL_STORAGE_BASE_DIR = os.environ["LOCAL_STORAGE_BASE_DIR"]
@@ -43,7 +46,7 @@ try:
     S3_ACCESS_KEY = os.environ["S3_ACCESS_KEY"]
     S3_SECRET_KEY = os.environ["S3_SECRET_KEY"]
 except KeyError as e:
-    exit(f"Please set {e} in .env file")
+    sys.exit(f"Please set {e} in .env file")
 
 # MQTT settings
 try:
@@ -52,7 +55,7 @@ try:
     MQTT_BROKER_USERNAME = os.environ["MQTT_BROKER_USERNAME"]
     MQTT_BROKER_PASSWORD = os.environ["MQTT_BROKER_PASSWORD"]
 except KeyError as e:
-    exit(f"Please set {e} in .env file")
+    sys.exit(f"Please set {e} in .env file")
 
 # sensor settings
 try:
@@ -66,14 +69,24 @@ except KeyError:
 try:
     TIMELAPSE_INTERVAL = int(os.environ["TIMELAPSE_INTERVAL"])
 except KeyError:
-    exit("Please set TIMELAPSE_INTERVAL in .env file")
+    sys.exit("Please set TIMELAPSE_INTERVAL in .env file")
+
+DEVICE_CONFIG_DEFAULT_NTP_SERVER = os.environ.get(
+    "DEVICE_CONFIG_DEFAULT_NTP_SERVER", DEVICE_NAME
+)
+DEVICE_CONFIG_DEFAULT_TIMEZONE_OFFSET_SEC = int(
+    os.environ.get("DEVICE_CONFIG_DEFAULT_TIMEZONE_OFFSET_SEC", "32400")
+)
+DEVICE_CONFIG_DEFAULT_MOISTURE_THRESHOLD = int(
+    os.environ.get("DEVICE_CONFIG_DEFAULT_MOISTURE_THRESHOLD", "35")
+)
 
 
 def get_device_id():
     prefix = "inahub-"
     try:
         # grep Serial /proc/cpuinfo|awk '{print $3}'
-        with open("/proc/cpuinfo", "r") as f:
+        with open("/proc/cpuinfo") as f:
             for line in f:
                 if line.startswith("Serial"):
                     return prefix + line.split(":")[1].strip()
@@ -113,6 +126,11 @@ DEFAULT_SETTINGS = {
         "save_audio": SENSOR_SAVE_AUDIO,
         "blacklist": [],
     },
+    "device_config_defaults": {
+        "ntp_server": DEVICE_CONFIG_DEFAULT_NTP_SERVER,
+        "timezone_offset_sec": DEVICE_CONFIG_DEFAULT_TIMEZONE_OFFSET_SEC,
+        "moisture_threshold": DEVICE_CONFIG_DEFAULT_MOISTURE_THRESHOLD,
+    },
 }
 
 
@@ -133,7 +151,7 @@ class Setting:
 
     def load(self):
         try:
-            with open(self.SETTING_FILE_PATH, "r") as f:
+            with open(self.SETTING_FILE_PATH) as f:
                 self.settings = json.load(f)
         except FileNotFoundError:
             pass
@@ -153,12 +171,6 @@ class Setting:
         return WORK_DIR
 
 
-__instance = None
-
-
+@lru_cache(maxsize=1)
 def setting():
-    global __instance
-    if not __instance:
-        __instance = Setting()
-
-    return __instance
+    return Setting()

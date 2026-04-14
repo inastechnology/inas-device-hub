@@ -2,6 +2,7 @@ import time
 import queue
 import json
 import threading
+import math
 from datetime import datetime, timezone
 
 from ina_device_hub.sensor_device_repository import sensor_device_repository
@@ -53,6 +54,11 @@ class DataProcessor:
                         message["payload"],
                         message["seqId"],
                     )
+                elif message["kind"] == "telemetry":
+                    self.process_farm_telemetry(
+                        message["device_id"],
+                        message["payload"],
+                    )
 
                 elif message["kind"] == "image":
                     self.process_sensor_image(
@@ -101,6 +107,41 @@ class DataProcessor:
         payload_as_dict = json.loads(payload)
 
         self.sensor_data_repository.add(device_id, seqId, payload_as_dict)
+
+    def process_farm_telemetry(self, device_id, payload):
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8")
+
+        print(f"Device {device_id} telemetry: {payload}")
+        payload_as_dict = json.loads(payload)
+        normalized_payload = self._normalize_farm_telemetry(device_id, payload_as_dict)
+        self.sensor_data_repository.add(device_id, None, normalized_payload)
+
+    def _normalize_farm_telemetry(self, topic_device_id: str, payload_as_dict: dict):
+        payload_device_id = payload_as_dict.get("device_id")
+        if payload_device_id and payload_device_id != topic_device_id:
+            logger.warning(
+                "Telemetry device_id mismatch: topic=%s payload=%s",
+                topic_device_id,
+                payload_device_id,
+            )
+
+        return {
+            "temp": self._safe_number(payload_as_dict.get("soil_temp_c")),
+            "extra": {
+                "schema": "farm.telemetry.v1",
+                "device_id": topic_device_id,
+                "telemetry": payload_as_dict,
+                "received_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        }
+
+    def _safe_number(self, value):
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)) and math.isfinite(value):
+            return float(value)
+        return None
 
     def process_sensor_image(self, device_id, kind, payload, seqId):
         """

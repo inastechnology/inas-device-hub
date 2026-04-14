@@ -1,8 +1,9 @@
 import threading
+
 from paho.mqtt import client as mqtt_client
 
+from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
-
 
 client_id = setting().get("mqtt")["mqtt_client_id"]
 
@@ -10,6 +11,7 @@ client_id = setting().get("mqtt")["mqtt_client_id"]
 class HubMQTTClient:
     def __init__(self, subscribed_data_queue):
         self.subscribed_data_queue = subscribed_data_queue
+        self.message_handlers = []
 
     def start(self):
         worker_thread = threading.Thread(target=self.client.loop_forever)
@@ -27,6 +29,11 @@ class HubMQTTClient:
 
         client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id)
         client.on_connect = on_connect
+        mqtt_settings = setting().get("mqtt")
+        if mqtt_settings["mqtt_username"]:
+            client.username_pw_set(
+                mqtt_settings["mqtt_username"], mqtt_settings["mqtt_password"]
+            )
         print(
             f"Connecting to MQTT Broker {setting().get('mqtt')['mqtt_broker']}:{setting().get('mqtt')['mqtt_port']}"
         )
@@ -35,13 +42,51 @@ class HubMQTTClient:
         )
         self.client = client
 
-    def publish(self, client: mqtt_client.Client, topic: str, msg: str):
-        result = client.publish(topic, msg)
-        status = result[0]
-        if status == 0:
+    def add_message_handler(self, handler):
+        self.message_handlers.append(handler)
+
+    def publish(self, topic: str, msg: str, qos: int = 1, retain: bool = False):
+        result = self.client.publish(topic, msg, qos=qos, retain=retain)
+        if result.rc == 0:
             print(f"Send `{msg}` to topic `{topic}`")
         else:
             print(f"Failed to send message to topic {topic}")
+        return result
+
+    def _parse_message(self, topic: str, payload):
+        parts = [part for part in topic.split("/") if part]
+
+        if len(parts) == 3 and parts[0] == "farm" and parts[2] == "telemetry":
+            return {
+                "message_type": "sensor_data",
+                "topic": topic,
+                "device_id": parts[1],
+                "kind": "telemetry",
+                "payload": payload,
+                "seqId": None,
+            }
+
+        if len(parts) >= 3 and parts[0] == "sensor":
+            return {
+                "message_type": "sensor_data",
+                "topic": topic,
+                "device_id": parts[1],
+                "kind": parts[2],
+                "payload": payload,
+                "seqId": parts[3] if len(parts) > 3 else None,
+            }
+
+        if len(parts) >= 4 and parts[1] == "kinds":
+            return {
+                "message_type": "device_config",
+                "topic": topic,
+                "device_id": parts[0],
+                "category": parts[2],
+                "action": parts[3],
+                "payload": payload,
+            }
+
+        return {"message_type": "unknown", "topic": topic, "payload": payload}
 
     def subscribe(self, topic: str):
         def on_message(client, userdata, msg):
@@ -49,21 +94,24 @@ class HubMQTTClient:
                 f"{msg.payload[0:100]}..." if len(msg.payload) > 100 else msg.payload
             )
             print(f"Received `{omitted_payload}` from `{msg.topic}` topic")
-            topic_parts = msg.topic.split("/")
-            device_id = topic_parts[1] if len(topic_parts) > 1 else None
-            kind = topic_parts[2] if len(topic_parts) > 2 else None
-            seqId = topic_parts[3] if len(topic_parts) > 3 else None
-            if device_id is not None and kind is not None:
-                self.subscribed_data_queue.put(
-                    {
-                        "device_id": device_id,
-                        "kind": kind,
-                        "payload": msg.payload,
-                        "seqId": seqId,
-                    }
-                )
-            else:
-                print("Invalid topic")
+            parsed_message = self._parse_message(msg.topic, msg.payload)
 
-        self.client.subscribe(topic, qos=1)
+            for handler in self.message_handlers:
+                try:
+                    handled = handler(client, parsed_message)
+                except Exception:
+                    logger.exception(
+                        "MQTT message handler failed for topic=%s", msg.topic
+                    )
+                    handled = False
+                if handled:
+                    return
+
+            if parsed_message["message_type"] == "sensor_data":
+                self.subscribed_data_queue.put(parsed_message)
+                return
+
+            print("Invalid topic")
+
+        self.client.subscribe(topic, qos=0)
         self.client.on_message = on_message

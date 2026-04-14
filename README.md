@@ -6,6 +6,8 @@ ina-device-hub は、MQTT で受信したセンサーデータやカメラ画像
 なにができるか（要点）
 
 - デバイスからのデータ受信（MQTT）と加工
+- `farm/{device_id}/telemetry` テレメトリの受信と保存
+- デバイスごとの設定配信（MQTT request/reply/push）
 - 画像／音声のローカル保存と S3 互換ストレージへのアップロード
 - ローカル DB（Turso/libsql）との統合
 - タイムラプス生成・スケジューリング（APScheduler）
@@ -110,10 +112,67 @@ rye run lint
 - S3_ENDPOINT_URL, S3_BUCKET_NAME, S3_BUCKET_REGION, S3_ACCESS_KEY, S3_SECRET_KEY
 - MQTT_BROKER_URL, MQTT_BROKER_PORT, MQTT_BROKER_USERNAME, MQTT_BROKER_PASSWORD
 - TIMELAPSE_INTERVAL
+- DEVICE_CONFIG_DEFAULT_NTP_SERVER, DEVICE_CONFIG_DEFAULT_TIMEZONE_OFFSET_SEC, DEVICE_CONFIG_DEFAULT_MOISTURE_THRESHOLD
 
 貢献
 
 PR・Issue を歓迎します。作業前に依存を同期し、`rye run format` と `rye run lint` を実行してください。
+
+デバイス設定配信
+
+- デバイスは `/<device_id>/kinds/config/request` へ publish します。
+- Hub は `/<device_id>/kinds/config/reply` へ retained で設定 JSON を返します。
+- 即時反映が必要な場合は `/<device_id>/kinds/config/push` に同じ JSON を publish できます。
+- 設定は `WORK_DIR/.device_configs.json` に保存されます。
+
+Farm Telemetry 受信
+
+- Hub は `farm/+/telemetry` を購読します。
+- payload は JSON として解釈し、`device_id` ごとの最新値を保存します。
+- `soil_moisture_*`, `soil_temp_c`, `battery_v`, `rssi`, `timestamp` は `latest_sensor_data.extra.telemetry` に保持します。
+- `soil_temp_c` は既存の温度グラフ互換のため `latest_sensor_data.temp` にも反映します。
+- `null` を含む payload を許容します。欠損値があっても受信処理が落ちない前提です。
+- デバイス詳細画面では最終受信時刻、電圧しきい値、未着時間に基づく簡易監視表示を出します。
+
+ローカル API
+
+- `GET /local/api/device-configs`
+- `GET /local/api/device-configs/<device_id>`
+- `PUT /local/api/device-configs/<device_id>`
+- `POST /local/api/device-configs/<device_id>/push`
+
+`PUT /local/api/device-configs/<device_id>?push=true` に設定 JSON を送ると、保存後に `push` まで実行します。
+
+設定 JSON 例
+
+```json
+{
+  "ntp_server": "my_device.local",
+  "timezone_offset_sec": 32400,
+  "moisture_threshold": 35,
+  "schedules": [
+    {
+      "hour": 6,
+      "minute": 30,
+      "duration_sec": 20,
+      "channel_mask": 1
+    },
+    {
+      "hour": 18,
+      "minute": 0,
+      "duration_sec": 30,
+      "channel_mask": 3
+    }
+  ]
+}
+```
+
+NTP サーバ運用
+
+- NTP サーバは MQTT Hub と同じ PC 上で、アプリとは別の OS サービスとして動かしてください。
+- `ntp_server` には、ファームから名前解決できるホスト名または固定 IP を設定してください。
+- ローカルネットワークから UDP 123 で到達できる必要があります。
+- Hub 自体は `ntp_server` の値を配信するだけなので、実際の NTP 提供は `chronyd` や `ntpd` のような既存サービスで構成する前提です。
 
 ライセンス
 
@@ -122,4 +181,3 @@ MIT ライセンス（`LICENSE` を参照）
 ---
 
 必要であれば、Raspberry Pi 固有のセットアップ手順や systemd の環境ファイル対応を README に追記します。
-

@@ -61,6 +61,7 @@ class SensorDataRepository:
             extra = json.loads(data_as_tupple[10])
         except json.JSONDecodeError:
             extra = {}
+        telemetry = extra.get("telemetry", {}) if isinstance(extra, dict) else {}
         return {
             "device_id": data_as_tupple[0],
             "temp": data_as_tupple[1],
@@ -77,6 +78,7 @@ class SensorDataRepository:
             .replace(tzinfo=timezone.utc)
             .astimezone(),
             "extra": extra,
+            "telemetry": telemetry,
         }
 
     def get_latest_aggreated(self, device_id: str):

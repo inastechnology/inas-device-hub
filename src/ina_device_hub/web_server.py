@@ -1,23 +1,69 @@
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    render_template_string,
-    Response,
-    render_template,
-)
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from ina_device_hub.storage_connector import storage_connector
-from ina_device_hub.sensor_device_repository import sensor_device_repository
-from ina_device_hub.sensor_data_repository import sensor_data_repository
-from ina_device_hub.sensor_image_repogitory import sensor_image_repogitory
-from ina_device_hub.location_repository import location_repository
+from flask import Flask, Response, jsonify, render_template, render_template_string, request
+
 from ina_device_hub.camera_connector import camera_connector
+from ina_device_hub.device_config_repository import DeviceConfigValidationError
+from ina_device_hub.device_config_service import device_config_service
+from ina_device_hub.location_repository import location_repository
+from ina_device_hub.sensor_data_repository import sensor_data_repository
+from ina_device_hub.sensor_device_repository import sensor_device_repository
+from ina_device_hub.sensor_image_repogitory import sensor_image_repogitory
+from ina_device_hub.storage_connector import storage_connector
 from ina_device_hub.utils import Utils
 
 app = Flask(__name__)
+
+
+def _normalize_display_value(value):
+    if value is None:
+        return "null"
+    return value
+
+
+def _build_telemetry_monitoring(latest_sensor_data):
+    if latest_sensor_data is None:
+        return []
+
+    monitoring = []
+    age = datetime.now(timezone.utc).astimezone() - latest_sensor_data["updated_at"]
+    age_hours = age.total_seconds() / 3600
+
+    if age >= timedelta(hours=6):
+        monitoring.append(
+            {
+                "severity": "warning",
+                "message": f"最終受信から {age_hours:.1f} 時間経過。低電圧または通信異常の可能性があります。",
+            }
+        )
+    elif age >= timedelta(hours=3):
+        monitoring.append(
+            {
+                "severity": "attention",
+                "message": f"最終受信から {age_hours:.1f} 時間経過。未着注意です。",
+            }
+        )
+
+    battery_v = latest_sensor_data.get("telemetry", {}).get("battery_v")
+    if isinstance(battery_v, (int, float)):
+        if battery_v < 3.2:
+            monitoring.append(
+                {
+                    "severity": "warning",
+                    "message": f"battery_v={battery_v}V。送信停止域として扱います。",
+                }
+            )
+        elif battery_v < 3.4:
+            monitoring.append(
+                {
+                    "severity": "attention",
+                    "message": f"battery_v={battery_v}V。低電圧警告です。",
+                }
+            )
+
+    return monitoring
 
 
 @app.route("/", methods=["GET"])
@@ -72,6 +118,8 @@ def get_device_info(device_id):
 
     latest_sensor_data = sensor_data_repository().get_latest(device_id)
     latest_aggregated_data = sensor_data_repository().get_latest_aggreated(device_id)
+    latest_telemetry = latest_sensor_data.get("telemetry", {}) if latest_sensor_data else {}
+    telemetry_monitoring = _build_telemetry_monitoring(latest_sensor_data)
 
     # plotly でグラフを描画
     # 画像を base64 エンコードして HTML に埋め込む
@@ -88,11 +136,43 @@ def get_device_info(device_id):
           <li>Location: {{ info.location }}</li>
           <li>Info: {{ info.info }}</li>
         <br>
-        <h2>Last Sensor Data ({{ latest_sensor_data.updated_at }})</h2>
+        <h2>Last Sensor Data{% if latest_sensor_data %} ({{ latest_sensor_data.updated_at }}){% endif %}</h2>
+        {% if latest_sensor_data %}
         <ul>
           <li>Temp: {{ latest_sensor_data.temp }}</li>
           <li>TDS: {{ latest_sensor_data.tds }}</li>
         </ul>
+        {% else %}
+        <p>No sensor data</p>
+        {% endif %}
+        <br>
+        <h2>Farm Telemetry</h2>
+        {% if latest_telemetry %}
+        <ul>
+          <li>Payload Device ID: {{ latest_telemetry.get("device_id") }}</li>
+          <li>Payload Timestamp: {{ latest_telemetry.get("timestamp") }}</li>
+          <li>Soil Moisture 1 Raw: {{ normalize_display_value(latest_telemetry.get("soil_moisture_1_raw")) }}</li>
+          <li>Soil Moisture 1 %: {{ normalize_display_value(latest_telemetry.get("soil_moisture_1_pct")) }}</li>
+          <li>Soil Moisture 2 Raw: {{ normalize_display_value(latest_telemetry.get("soil_moisture_2_raw")) }}</li>
+          <li>Soil Moisture 2 %: {{ normalize_display_value(latest_telemetry.get("soil_moisture_2_pct")) }}</li>
+          <li>Soil Temp C: {{ normalize_display_value(latest_telemetry.get("soil_temp_c")) }}</li>
+          <li>Battery V: {{ normalize_display_value(latest_telemetry.get("battery_v")) }}</li>
+          <li>RSSI: {{ normalize_display_value(latest_telemetry.get("rssi")) }}</li>
+        </ul>
+        {% else %}
+        <p>No farm telemetry</p>
+        {% endif %}
+        <br>
+        <h2>Monitoring</h2>
+        {% if telemetry_monitoring %}
+        <ul>
+          {% for item in telemetry_monitoring %}
+          <li>[{{ item.severity }}] {{ item.message }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p>No active alerts</p>
+        {% endif %}
         <br>
         <h2>Graph</h2>
         <div>
@@ -111,6 +191,9 @@ def get_device_info(device_id):
         info=device_info,
         agg_sensor_graph=agg_sensor_graph,
         latest_sensor_data=latest_sensor_data,
+        latest_telemetry=latest_telemetry,
+        telemetry_monitoring=telemetry_monitoring,
+        normalize_display_value=_normalize_display_value,
     )
 
 
@@ -295,6 +378,45 @@ def get_devices():
 def get_locations():
     locations = location_repository().get_all()
     return jsonify(locations)
+
+
+@app.route("/local/api/device-configs", methods=["GET"])
+def get_device_configs():
+    return jsonify(device_config_service().get_all_records())
+
+
+@app.route("/local/api/device-configs/<device_id>", methods=["GET"])
+def get_device_config(device_id):
+    return jsonify(device_config_service().get_record(device_id))
+
+
+@app.route("/local/api/device-configs/<device_id>", methods=["PUT"])
+def update_device_config(device_id):
+    request_body = request.get_json(silent=True)
+    if not isinstance(request_body, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+
+    push = request.args.get("push", "false").lower() == "true"
+    try:
+        result = device_config_service().update_and_optionally_push(
+            device_id, request_body, push=push
+        )
+    except DeviceConfigValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    return jsonify(result)
+
+
+@app.route("/local/api/device-configs/<device_id>/push", methods=["POST"])
+def push_device_config(device_id):
+    try:
+        published = device_config_service().publish_push(device_id)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+
+    return jsonify(published)
 
 
 @app.route("/local/api/images/<path:image_path>")
