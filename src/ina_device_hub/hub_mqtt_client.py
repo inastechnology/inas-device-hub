@@ -2,6 +2,7 @@ import threading
 
 from paho.mqtt import client as mqtt_client
 
+from ina_device_hub.discord_notification_service import discord_notification_service
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
 
@@ -12,6 +13,7 @@ class HubMQTTClient:
     def __init__(self, subscribed_data_queue):
         self.subscribed_data_queue = subscribed_data_queue
         self.message_handlers = []
+        self.discord_notification_service = discord_notification_service()
 
     def start(self):
         worker_thread = threading.Thread(target=self.client.loop_forever)
@@ -24,22 +26,18 @@ class HubMQTTClient:
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
                 print("Connected to MQTT Broker!")
+                self.discord_notification_service.notify_mqtt_activity("connected", "$SYS/ina-device-hub/mqtt", payload={"broker": setting().get("mqtt")["mqtt_broker"]})
             else:
                 print("Failed to connect, return code %d\n", rc)
+                self.discord_notification_service.notify_mqtt_activity("connect_failed", "$SYS/ina-device-hub/mqtt", payload={"return_code": rc})
 
         client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id)
         client.on_connect = on_connect
         mqtt_settings = setting().get("mqtt")
         if mqtt_settings["mqtt_username"]:
-            client.username_pw_set(
-                mqtt_settings["mqtt_username"], mqtt_settings["mqtt_password"]
-            )
-        print(
-            f"Connecting to MQTT Broker {setting().get('mqtt')['mqtt_broker']}:{setting().get('mqtt')['mqtt_port']}"
-        )
-        client.connect(
-            setting().get("mqtt")["mqtt_broker"], setting().get("mqtt")["mqtt_port"]
-        )
+            client.username_pw_set(mqtt_settings["mqtt_username"], mqtt_settings["mqtt_password"])
+        print(f"Connecting to MQTT Broker {setting().get('mqtt')['mqtt_broker']}:{setting().get('mqtt')['mqtt_port']}")
+        client.connect(setting().get("mqtt")["mqtt_broker"], setting().get("mqtt")["mqtt_port"])
         self.client = client
 
     def add_message_handler(self, handler):
@@ -51,6 +49,7 @@ class HubMQTTClient:
             print(f"Send `{msg}` to topic `{topic}`")
         else:
             print(f"Failed to send message to topic {topic}")
+        self.discord_notification_service.notify_mqtt_activity("publish", topic, payload=msg, mqtt_rc=result.rc)
         return result
 
     def _parse_message(self, topic: str, payload):
@@ -90,19 +89,16 @@ class HubMQTTClient:
 
     def subscribe(self, topic: str):
         def on_message(client, userdata, msg):
-            omitted_payload = (
-                f"{msg.payload[0:100]}..." if len(msg.payload) > 100 else msg.payload
-            )
+            omitted_payload = f"{msg.payload[0:100]}..." if len(msg.payload) > 100 else msg.payload
             print(f"Received `{omitted_payload}` from `{msg.topic}` topic")
             parsed_message = self._parse_message(msg.topic, msg.payload)
+            self.discord_notification_service.notify_mqtt_activity("received", msg.topic, payload=msg.payload, parsed_message=parsed_message)
 
             for handler in self.message_handlers:
                 try:
                     handled = handler(client, parsed_message)
                 except Exception:
-                    logger.exception(
-                        "MQTT message handler failed for topic=%s", msg.topic
-                    )
+                    logger.exception("MQTT message handler failed for topic=%s", msg.topic)
                     handled = False
                 if handled:
                     return
