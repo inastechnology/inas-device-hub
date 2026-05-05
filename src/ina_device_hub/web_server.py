@@ -1,11 +1,11 @@
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from flask import Flask, Response, jsonify, render_template, render_template_string, request
 
 from ina_device_hub.camera_connector import camera_connector
-from ina_device_hub.device_config_repository import DeviceConfigValidationError
+from ina_device_hub.device_config_repository import DeviceConfigValidationError, DeviceRecordValidationError
 from ina_device_hub.device_config_service import device_config_service
 from ina_device_hub.location_repository import location_repository
 from ina_device_hub.sensor_data_repository import sensor_data_repository
@@ -28,7 +28,7 @@ def _build_telemetry_monitoring(latest_sensor_data):
         return []
 
     monitoring = []
-    age = datetime.now(timezone.utc).astimezone() - latest_sensor_data["updated_at"]
+    age = datetime.now(UTC).astimezone() - latest_sensor_data["updated_at"]
     age_hours = age.total_seconds() / 3600
 
     if age >= timedelta(hours=6):
@@ -47,7 +47,7 @@ def _build_telemetry_monitoring(latest_sensor_data):
         )
 
     battery_v = latest_sensor_data.get("telemetry", {}).get("battery_v")
-    if isinstance(battery_v, (int, float)):
+    if isinstance(battery_v, int | float):
         if battery_v < 3.2:
             monitoring.append(
                 {
@@ -104,9 +104,7 @@ def index():
     </html>
     """
 
-    return render_template_string(
-        template, devices=devices, locations=locations, cameras=cameras
-    )
+    return render_template_string(template, devices=devices, locations=locations, cameras=cameras)
 
 
 @app.route("/devices/<device_id>", methods=["GET"])
@@ -123,9 +121,7 @@ def get_device_info(device_id):
 
     # plotly でグラフを描画
     # 画像を base64 エンコードして HTML に埋め込む
-    agg_sensor_graph = Utils.create_latest_aggregated_graph_as_html(
-        device_id, latest_aggregated_data
-    )
+    agg_sensor_graph = Utils.create_latest_aggregated_graph_as_html(device_id, latest_aggregated_data)
 
     template = """
     <html>
@@ -259,9 +255,7 @@ def get_latest_image(device_id):
     if not sensor_images:
         return jsonify({"error": "no image"}), 404
 
-    return render_template(
-        "image_page.html", sensor_images=sensor_images, device_id=device_id
-    )
+    return render_template("image_page.html", sensor_images=sensor_images, device_id=device_id)
 
 
 @app.route("/locations", methods=["GET"])
@@ -295,12 +289,8 @@ def add_location():
         location_description = request.form.get("location_description")
         location_image = request.files.get("location_image")
         # save image to cloud
-        image_key = (
-            f"locations/{location_id}/{os.path.basename(location_image.filename)}"
-        )
-        image_path = storage_connector().save_to_cloud(
-            image_key, location_image.read(), "image/jpeg"
-        )
+        image_key = f"locations/{location_id}/{os.path.basename(location_image.filename)}"
+        image_path = storage_connector().save_to_cloud(image_key, location_image.read(), "image/jpeg")
         location_repository().add(
             location_id,
             {
@@ -398,9 +388,7 @@ def update_device_config(device_id):
 
     push = request.args.get("push", "false").lower() == "true"
     try:
-        result = device_config_service().update_and_optionally_push(
-            device_id, request_body, push=push
-        )
+        result = device_config_service().update_and_optionally_push(device_id, request_body, push=push)
     except DeviceConfigValidationError as exc:
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
@@ -417,6 +405,76 @@ def push_device_config(device_id):
         return jsonify({"error": str(exc)}), 503
 
     return jsonify(published)
+
+
+@app.route("/local/api/mqtt-devices", methods=["GET"])
+def list_mqtt_devices():
+    return jsonify(device_config_service().get_all_records())
+
+
+@app.route("/local/api/mqtt-devices/<device_id>", methods=["GET"])
+def get_mqtt_device(device_id):
+    record = device_config_service().get_record(device_id)
+    if record is None:
+        return jsonify({"error": "device not found"}), 404
+    return jsonify(record)
+
+
+@app.route("/local/api/mqtt-devices/<device_id>", methods=["PATCH"])
+def update_mqtt_device_metadata(device_id):
+    request_body = request.get_json(silent=True)
+    if not isinstance(request_body, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+
+    try:
+        record = device_config_service().update_metadata(device_id, request_body)
+    except DeviceRecordValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(record)
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/approve", methods=["POST"])
+def approve_mqtt_device(device_id):
+    request_body = request.get_json(silent=True) or {}
+    try:
+        record = device_config_service().set_state(device_id, "active", approved_by=request_body.get("approved_by"))
+    except DeviceRecordValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(record)
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/disable", methods=["POST"])
+def disable_mqtt_device(device_id):
+    return jsonify(device_config_service().set_state(device_id, "disabled"))
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/retire", methods=["POST"])
+def retire_mqtt_device(device_id):
+    return jsonify(device_config_service().set_state(device_id, "retired"))
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/runtime-config", methods=["GET"])
+def get_mqtt_device_runtime_config(device_id):
+    return jsonify(device_config_service().get_config(device_id))
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/runtime-config", methods=["PUT"])
+def update_mqtt_device_runtime_config(device_id):
+    return update_device_config(device_id)
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/runtime-config/push", methods=["POST"])
+def push_mqtt_device_runtime_config(device_id):
+    return push_device_config(device_id)
+
+
+@app.route("/local/api/mqtt-devices/<device_id>/statuses", methods=["GET"])
+def list_mqtt_device_statuses(device_id):
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        return jsonify({"error": "limit must be an integer"}), 400
+    return jsonify(device_config_service().list_statuses(device_id, limit=limit))
 
 
 @app.route("/local/api/images/<path:image_path>")
