@@ -29,12 +29,16 @@ usage() {
 Usage:
   $0 list [--source-dir DIR] [--work-dir DIR] [--include-work-dir]
   $0 export ARCHIVE_DIR [--source-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
+  $0 export-zip ZIP_PATH [--source-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
   $0 import ARCHIVE_DIR [--target-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
+  $0 import-zip ZIP_PATH [--target-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
 
 Commands:
-  list      Show local files that would be migrated
-  export    Copy local files from this repository into ARCHIVE_DIR
-  import    Copy local files from ARCHIVE_DIR into this repository
+  list        Show local files that would be migrated
+  export      Copy local files from this repository into ARCHIVE_DIR
+  export-zip  Copy local files into a portable zip archive
+  import      Copy local files from ARCHIVE_DIR into this repository
+  import-zip  Restore local files from a zip archive
 
 Options:
   --source-dir DIR       Repository directory to export from
@@ -55,6 +59,11 @@ require_arg() {
   local name="$1"
   local value="${2:-}"
   [[ -n "$value" ]] || fail "$name requires a value"
+}
+
+require_command() {
+  local command_name="$1"
+  command -v "$command_name" >/dev/null 2>&1 || fail "missing required command: $command_name"
 }
 
 resolve_path() {
@@ -114,6 +123,32 @@ print_list() {
   fi
 }
 
+export_to_dir() {
+  local archive_dir="$1"
+  local path
+
+  echo "Exporting local files to: $archive_dir"
+  for path in "${REPO_LOCAL_FILES[@]}"; do
+    copy_item "$SOURCE_DIR/$path" "$archive_dir/repo/$path"
+  done
+  if [[ "$INCLUDE_WORK_DIR" == true ]]; then
+    copy_item "$WORK_DIR" "$archive_dir/work_dir"
+  fi
+}
+
+import_from_dir() {
+  local archive_dir="$1"
+  local path
+
+  echo "Importing local files from: $archive_dir"
+  for path in "${REPO_LOCAL_FILES[@]}"; do
+    copy_item "$archive_dir/repo/$path" "$TARGET_DIR/$path"
+  done
+  if [[ "$INCLUDE_WORK_DIR" == true ]]; then
+    copy_item "$archive_dir/work_dir" "$WORK_DIR"
+  fi
+}
+
 parse_common_options() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -167,13 +202,35 @@ case "$COMMAND" in
     ARCHIVE_DIR="$(resolve_path "$ARCHIVE_DIR")"
     parse_common_options "$@"
 
-    echo "Exporting local files to: $ARCHIVE_DIR"
-    for path in "${REPO_LOCAL_FILES[@]}"; do
-      copy_item "$SOURCE_DIR/$path" "$ARCHIVE_DIR/repo/$path"
-    done
-    if [[ "$INCLUDE_WORK_DIR" == true ]]; then
-      copy_item "$WORK_DIR" "$ARCHIVE_DIR/work_dir"
+    export_to_dir "$ARCHIVE_DIR"
+    ;;
+  export-zip)
+    ZIP_PATH="${1:-}"
+    require_arg "ZIP_PATH" "$ZIP_PATH"
+    shift
+    ZIP_PATH="$(resolve_path "$ZIP_PATH")"
+    parse_common_options "$@"
+
+    if [[ -e "$ZIP_PATH" && "$OVERWRITE" != true ]]; then
+      fail "zip already exists: $ZIP_PATH (use --overwrite to replace it)"
     fi
+
+    echo "Exporting local files to zip: $ZIP_PATH"
+    if [[ "$DRY_RUN" == true ]]; then
+      export_to_dir "$(dirname "$ZIP_PATH")/$(basename "$ZIP_PATH" .zip)"
+      echo "zip: $(dirname "$ZIP_PATH")/$(basename "$ZIP_PATH" .zip) -> $ZIP_PATH"
+      exit 0
+    fi
+
+    require_command zip
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+    export_to_dir "$TMP_DIR/archive"
+    mkdir -p "$(dirname "$ZIP_PATH")"
+    if [[ -e "$ZIP_PATH" && "$OVERWRITE" == true ]]; then
+      rm -f "$ZIP_PATH"
+    fi
+    (cd "$TMP_DIR/archive" && zip -qr "$ZIP_PATH" .)
     ;;
   import)
     ARCHIVE_DIR="${1:-}"
@@ -182,13 +239,32 @@ case "$COMMAND" in
     ARCHIVE_DIR="$(resolve_path "$ARCHIVE_DIR")"
     parse_common_options "$@"
 
-    echo "Importing local files from: $ARCHIVE_DIR"
-    for path in "${REPO_LOCAL_FILES[@]}"; do
-      copy_item "$ARCHIVE_DIR/repo/$path" "$TARGET_DIR/$path"
-    done
-    if [[ "$INCLUDE_WORK_DIR" == true ]]; then
-      copy_item "$ARCHIVE_DIR/work_dir" "$WORK_DIR"
+    import_from_dir "$ARCHIVE_DIR"
+    ;;
+  import-zip)
+    ZIP_PATH="${1:-}"
+    require_arg "ZIP_PATH" "$ZIP_PATH"
+    shift
+    ZIP_PATH="$(resolve_path "$ZIP_PATH")"
+    parse_common_options "$@"
+
+    [[ -f "$ZIP_PATH" ]] || fail "zip not found: $ZIP_PATH"
+    echo "Importing local files from zip: $ZIP_PATH"
+    if [[ "$DRY_RUN" == true ]]; then
+      require_command unzip
+      unzip -Z1 "$ZIP_PATH" | sed 's/^/zip entry: /'
+      echo "dry-run import target: $TARGET_DIR"
+      if [[ "$INCLUDE_WORK_DIR" == true ]]; then
+        echo "dry-run work dir target: $WORK_DIR"
+      fi
+      exit 0
     fi
+
+    require_command unzip
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+    unzip -q "$ZIP_PATH" -d "$TMP_DIR/archive"
+    import_from_dir "$TMP_DIR/archive"
     ;;
   -h|--help|"")
     usage
