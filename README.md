@@ -75,6 +75,23 @@ journalctl -u inas-device-hub@frontend -f
 journalctl -u inas-device-hub@backend -f
 ```
 
+Git 管理外ローカルファイルの引っ越し
+
+`.env`、デバイス一覧 JSON、`data/`、`logs/` など Git 管理外のローカルファイルは、次のコマンドで退避・復元できます。
+
+```bash
+rye run local-files list
+rye run local-files export /tmp/ina-device-hub-local-files
+rye run local-files import /tmp/ina-device-hub-local-files --overwrite
+```
+
+実行時の `WORK_DIR`（既定: `~/.ina-device-hub`）も含める場合は `--include-work-dir` を付けます。
+
+```bash
+rye run local-files export /tmp/ina-device-hub-local-files --include-work-dir
+rye run local-files import /tmp/ina-device-hub-local-files --include-work-dir --overwrite
+```
+
 手動でテンプレートを配置する場合
 
 ```bash

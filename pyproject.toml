@@ -47,6 +47,7 @@ format = { chain = ["format:ruff", "format:ruff_check"] }
 serve = { cmd = "python ./src/ina_device_hub/serve.py", args = [
     "--help",
 ] }
+local-files = { cmd = "bash ./scripts/migrate_local_files.sh" }
 
 [tool.ruff]
 exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "third_party"]
