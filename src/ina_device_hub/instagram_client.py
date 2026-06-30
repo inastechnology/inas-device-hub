@@ -61,6 +61,20 @@ class InstagramClient:
             interval=self.interval_reel,
         )
 
+    def get_media_comments(self, media_id: str, limit: int = 50):
+        query = {
+            "fields": "id,text,username,timestamp,like_count,replies{id,text,username,timestamp}",
+            "limit": str(limit),
+        }
+        response = self._get(f"/{media_id}/comments", query)
+        comments = list(response.get("data") or [])
+        next_url = (response.get("paging") or {}).get("next")
+        while next_url and len(comments) < limit:
+            next_response = self._get_url(next_url)
+            comments.extend(next_response.get("data") or [])
+            next_url = (next_response.get("paging") or {}).get("next")
+        return comments[:limit]
+
     def _post_media(
         self,
         create_params: dict,
@@ -82,21 +96,14 @@ class InstagramClient:
             except Exception as exc:
                 logger.error(f"Error posting media: {exc}")
                 if retry >= self.retry_limit:
-                    raise RuntimeError(
-                        "Failed to post media after multiple attempts"
-                    ) from exc
-                logger.warning(
-                    "Retrying Instagram media post " f"({retry}/{self.retry_limit})"
-                )
+                    raise RuntimeError("Failed to post media after multiple attempts") from exc
+                logger.warning(f"Retrying Instagram media post ({retry}/{self.retry_limit})")
                 time.sleep(retry * 2 + 1)
 
         raise RuntimeError("Failed to post media after retries")
 
     def _create_container(self, payload: dict):
-        logger.info(
-            "Creating Instagram media container with payload: "
-            f"{json.dumps(payload, ensure_ascii=False)}"
-        )
+        logger.info(f"Creating Instagram media container with payload: {json.dumps(payload, ensure_ascii=False)}")
         response = self._post(f"/{self.user_id}/media", payload)
         creation_id = response.get("id")
         if not creation_id:
@@ -120,10 +127,7 @@ class InstagramClient:
             if time.time() - started_at > timeout:
                 raise TimeoutError("Instagram media container did not finish in time")
             poll_count += 1
-            logger.info(
-                f"Polling Instagram container {creation_id}: "
-                f"status_code={status_code}, count={poll_count}"
-            )
+            logger.info(f"Polling Instagram container {creation_id}: status_code={status_code}, count={poll_count}")
             time.sleep(interval)
 
     def _publish_container(self, creation_id: str):
@@ -157,6 +161,15 @@ class InstagramClient:
             data=data,
             method="POST",
         )
+        try:
+            with request.urlopen(req, timeout=60) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(detail) from exc
+
+    def _get_url(self, url: str):
+        req = request.Request(url, method="GET")
         try:
             with request.urlopen(req, timeout=60) as response:
                 return json.loads(response.read().decode("utf-8"))

@@ -177,6 +177,10 @@ def validate_device_config(config: dict):
     if not isinstance(moisture_threshold, int) or not 0 <= moisture_threshold <= 100:
         raise DeviceConfigValidationError("moisture_threshold must be between 0 and 100")
 
+    force_watering = config.get("force_watering", False)
+    if not isinstance(force_watering, bool):
+        raise DeviceConfigValidationError("force_watering must be a boolean")
+
     schedules = config["schedules"]
     if not isinstance(schedules, list):
         raise DeviceConfigValidationError("schedules must be an array")
@@ -221,6 +225,7 @@ def validate_device_config(config: dict):
         "ntp_server": ntp_server.strip(),
         "timezone_offset_sec": timezone_offset_sec,
         "moisture_threshold": moisture_threshold,
+        "force_watering": force_watering,
         "schedules": normalized_schedules,
     }
     payload = json.dumps(normalized, ensure_ascii=True, separators=(",", ":"))

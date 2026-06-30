@@ -25,9 +25,7 @@ def get_rotate_file_logger(name: str, log_file: str) -> Logger:
     formatter = Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # setup file handler
-    rotate_handler = RotatingFileHandler(
-        f"{log_dir}/{log_file}", maxBytes=log_size, backupCount=log_num
-    )
+    rotate_handler = RotatingFileHandler(f"{log_dir}/{log_file}", maxBytes=log_size, backupCount=log_num)
     rotate_handler.setLevel(DEBUG)
     rotate_handler.setFormatter(formatter)
     logger.addHandler(rotate_handler)

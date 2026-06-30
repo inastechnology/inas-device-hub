@@ -103,9 +103,9 @@ class InaDBConnector:
         INSERT 時は created_at が自動設定され、UPDATE 時は updated_at に CURRENT_TIMESTAMP が自動で設定されます。
         """
         self.conn.execute(
-            "INSERT INTO latest_sensor_data (device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, extra) "
+            "INSERT INTO latest_sensor_data (sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, extra) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(device_id) DO UPDATE SET "
+            "ON CONFLICT(sensor_id) DO UPDATE SET "
             "temp = excluded.temp, "
             "tds = excluded.tds, "
             "ec = excluded.ec, "
@@ -131,31 +131,42 @@ class InaDBConnector:
     @commit_and_sync
     def insert_aggregated_sensor_data(self, device_id: str, yyyymmdd_hh: str, data: dict):
         """
-        集計済センサーデータ（拡張版）を登録します。複合キー（device_id, yyyymmddhh）。
+        集計済センサーデータ（拡張版）を登録します。複合キー（sensor_id, yyyymmddhh）。
         """
         self.conn.execute(
-            "INSERT INTO aggregated_sensor_data (device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
-            "VALUES ("
-            f'"{device_id}", {round(data.get("temp", -1000.0), 2)}, {round(data.get("tds", -1000.0), 2)}, '
-            f"{round(data.get('ec', -1000.0), 2)}, {round(data.get('ph', -1000.0), 2)}, "
-            f"{round(data.get('dissolved_oxygen', -1000.0), 2)}, "
-            f"{round(data.get('ammonia', -1000.0), 2)}, {round(data.get('nitrate', -1000.0), 2)}, "
-            f"'{yyyymmdd_hh}', \"{data.get('extra', '{}')}\""
-            ") "
+            "INSERT INTO aggregated_sensor_data (sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, extra) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                device_id,
+                round(data.get("temp", -1000.0), 2),
+                round(data.get("tds", -1000.0), 2),
+                round(data.get("ec", -1000.0), 2),
+                round(data.get("ph", -1000.0), 2),
+                round(data.get("dissolved_oxygen", -1000.0), 2),
+                round(data.get("ammonia", -1000.0), 2),
+                round(data.get("nitrate", -1000.0), 2),
+                yyyymmdd_hh,
+                json.dumps(data.get("extra", {})),
+            ),
         )
 
     def fetch_latest_sensor_data(self, device_id: str):
         """
         最新センサーデータを取得します。
         """
-        return self.conn.execute("SELECT * FROM latest_sensor_data WHERE device_id = ?", (device_id,)).fetchone()
+        return self.conn.execute(
+            "SELECT sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, created_at, updated_at, extra "
+            "FROM latest_sensor_data WHERE sensor_id = ?",
+            (device_id,),
+        ).fetchone()
 
     def fetch_latest_aggregated_sensor_data(self, device_id: str, limit: int = 50):
         """
         最新集計済センサーデータを取得します。
         """
         return self.conn.execute(
-            "SELECT * FROM aggregated_sensor_data WHERE device_id = ? ORDER BY yyyymmddhh DESC LIMIT ?",
+            "SELECT sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra "
+            "FROM aggregated_sensor_data WHERE sensor_id = ? ORDER BY yyyymmddhh DESC LIMIT ?",
             (device_id, limit),
         ).fetchall()
 
@@ -164,7 +175,8 @@ class InaDBConnector:
         集計済センサーデータを取得します。
         """
         return self.conn.execute(
-            "SELECT * FROM aggregated_sensor_data WHERE device_id = ? AND yyyymmddhh BETWEEN ? AND ?",
+            "SELECT sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra "
+            "FROM aggregated_sensor_data WHERE sensor_id = ? AND yyyymmddhh BETWEEN ? AND ?",
             (device_id, start, end),
         ).fetchall()
 

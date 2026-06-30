@@ -1,7 +1,11 @@
-#! /bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # load rye env
-source "$HOME/.rye/env"
+if [[ -f "$HOME/.rye/env" ]]; then
+  # shellcheck disable=SC1090
+  source "$HOME/.rye/env"
+fi
 
 # start rye server
-rye run serve
+exec rye run serve

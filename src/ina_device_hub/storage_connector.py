@@ -28,9 +28,7 @@ class StorageConnector:
             os.makedirs(self.LOCAL_STORAGE_BASE_DIR)
 
         self.s3 = self._create_s3_client(setting().get("storage_bucket"))
-        self.tmp_s3 = self._create_optional_s3_client(
-            setting().get("temporary_storage_bucket")
-        )
+        self.tmp_s3 = self._create_optional_s3_client(setting().get("temporary_storage_bucket"))
 
     def _create_s3_client(self, bucket_settings: dict):
         return boto3.client(
@@ -78,9 +76,7 @@ class StorageConnector:
             return None
         return file_path
 
-    def save_bytes_to_temporary_cloud(
-        self, file_path, fileBytes, content_type="application/octet-stream"
-    ):
+    def save_bytes_to_temporary_cloud(self, file_path, fileBytes, content_type="application/octet-stream"):
         if self.tmp_s3 is None:
             raise ValueError("temporary storage bucket is not configured")
 
@@ -93,9 +89,7 @@ class StorageConnector:
                 fileBytes,
                 content_type,
             )
-            logger.info(
-                f"Temporary object uploaded to {file_path}" f"({len(fileBytes)} bytes)"
-            )
+            logger.info(f"Temporary object uploaded to {file_path}({len(fileBytes)} bytes)")
         except Exception as e:
             print(f"Error: {e}")
             return None

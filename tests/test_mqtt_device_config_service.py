@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ os.environ.setdefault("MQTT_BROKER_PASSWORD", "")
 os.environ.setdefault("TIMELAPSE_INTERVAL", "600")
 
 from ina_device_hub.device_config_repository import DeviceConfigRepository, DeviceConfigValidationError, validate_device_config  # noqa: E402
+from ina_device_hub.device_event_log import _event_log_path  # noqa: E402
 from ina_device_hub.device_config_service import DeviceConfigService  # noqa: E402
 
 
@@ -47,7 +49,7 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
     def tearDown(self):
         self.tmp_dir.cleanup()
 
-    def test_config_request_registers_pending_device_and_replies_safe_default(self):
+    def test_config_request_registers_pending_device_and_replies_default_threshold(self):
         handled = self.service.handle_mqtt_message(
             None,
             {
@@ -62,10 +64,15 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
         self.assertTrue(handled)
         record = self.repository.get("INADS-00000000-0000-4000-8000-000000000001")
         self.assertEqual(record["state"], "pending")
-        self.assertEqual(record["config"]["moisture_threshold"], 0)
+        self.assertEqual(record["config"]["moisture_threshold"], 35)
+        self.assertEqual(record["config"]["schedules"][0]["hour"], 6)
+        self.assertEqual(record["config"]["schedules"][0]["minute"], 30)
+        self.assertTrue(record["config"]["force_watering"])
         self.assertIsNotNone(record["last_config_request_at"])
         self.assertIsNotNone(record["last_config_reply_at"])
         self.assertEqual(self.mqtt_client.published[0]["topic"], "/INADS-00000000-0000-4000-8000-000000000001/kinds/config/reply")
+        self.assertIn('"moisture_threshold":35', self.mqtt_client.published[0]["payload"])
+        self.assertIn('"force_watering":true', self.mqtt_client.published[0]["payload"])
         self.assertFalse(self.mqtt_client.published[0]["retain"])
         self.assertEqual(self.mqtt_client.published[0]["qos"], 0)
 
@@ -75,6 +82,7 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
             "ntp_server": "pool.ntp.org",
             "timezone_offset_sec": 32400,
             "moisture_threshold": 45,
+            "force_watering": True,
             "schedules": [{"hour": 8, "minute": 15, "duration_sec": 30, "channel_mask": 3}],
         }
         self.service.update_config(device_id, config)
@@ -92,6 +100,12 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
         )
 
         self.assertIn('"moisture_threshold":45', self.mqtt_client.published[0]["payload"])
+        self.assertIn('"force_watering":true', self.mqtt_client.published[0]["payload"])
+        event = _read_last_device_event()
+        self.assertEqual(event["event_type"], "device_config_publish")
+        self.assertEqual(event["direction"], "outbound")
+        self.assertEqual(event["device_id"], device_id)
+        self.assertEqual(event["payload"]["moisture_threshold"], 45)
 
     def test_config_request_replies_even_when_payload_is_empty_or_invalid(self):
         device_id = "INADS-00000000-0000-4000-8000-000000000004"
@@ -121,7 +135,7 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
                 "device_id": device_id,
                 "category": "agri",
                 "action": "immediate",
-                "payload": b'{"seq":123,"config_received":true,"time_synced":true}',
+                "payload": b'{"seq":123,"config_received":true,"time_synced":true,"next_sleep_sec":60}',
             },
         )
 
@@ -129,6 +143,13 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
         record = self.repository.get(device_id)
         self.assertEqual(record["last_status"]["seq"], 123)
         self.assertEqual(self.service.list_statuses(device_id)[0]["payload"]["seq"], 123)
+        event = _read_last_device_event()
+        self.assertEqual(event["event_type"], "device_status")
+        self.assertEqual(event["direction"], "inbound")
+        self.assertEqual(event["device_id"], device_id)
+        self.assertEqual(event["payload"]["seq"], 123)
+        self.assertEqual(event["next_sleep_sec"], 60)
+        self.assertIn("next_wake_at", event)
 
     def test_config_validation_requires_schedule_and_payload_under_512_bytes(self):
         with self.assertRaises(DeviceConfigValidationError):
@@ -150,6 +171,23 @@ class MqttDeviceConfigServiceTest(unittest.TestCase):
                     "schedules": [{"hour": 7, "minute": 0, "duration_sec": 1, "channel_mask": 1}],
                 }
             )
+
+        with self.assertRaises(DeviceConfigValidationError):
+            validate_device_config(
+                {
+                    "ntp_server": "pool.ntp.org",
+                    "timezone_offset_sec": 32400,
+                    "moisture_threshold": 40,
+                    "force_watering": "true",
+                    "schedules": [{"hour": 7, "minute": 0, "duration_sec": 1, "channel_mask": 1}],
+                }
+            )
+
+
+def _read_last_device_event():
+    with open(_event_log_path(), encoding="utf-8") as file:
+        lines = [line for line in file.readlines() if line.strip()]
+    return json.loads(lines[-1])
 
 
 if __name__ == "__main__":

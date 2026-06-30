@@ -137,14 +137,12 @@ chown root:root "$TARGET_UNIT"
 echo "Reloading systemd daemon"
 systemctl daemon-reload
 
-echo "Enabling and starting ${SERVICE_NAME}@frontend and ${SERVICE_NAME}@backend"
-systemctl enable --now "${SERVICE_NAME}@frontend.service"
-systemctl enable --now "${SERVICE_NAME}@backend.service"
+echo "Enabling and starting ${SERVICE_NAME}@main"
+systemctl enable --now "${SERVICE_NAME}@main.service"
 
 echo "Installation complete. Service statuses:"
-systemctl status "${SERVICE_NAME}@frontend" --no-pager || true
-systemctl status "${SERVICE_NAME}@backend" --no-pager || true
+systemctl status "${SERVICE_NAME}@main" --no-pager || true
 
-echo "If a service failed to start, check logs with: journalctl -u ${SERVICE_NAME}@frontend -f  OR  journalctl -u ${SERVICE_NAME}@backend -f"
+echo "If the service failed to start, check logs with: journalctl -u ${SERVICE_NAME}@main -f"
 
 exit 0

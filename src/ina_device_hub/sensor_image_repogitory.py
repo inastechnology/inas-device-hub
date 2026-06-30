@@ -21,15 +21,11 @@ class SensorImageRepogitory:
 
     def save(self, device_id, imageBytes):
         # save image to cloud storage
-        image_path = self.storage_connector.save_to_cloud(
-            self.get_image_path(device_id), imageBytes, "image/jpeg"
-        )
+        image_path = self.storage_connector.save_to_cloud(self.get_image_path(device_id), imageBytes, "image/jpeg")
 
         # insert image path to database
         yyyymmddhhmmss = time.strftime("%Y%m%d%H%M%S", time.gmtime())
-        self.db_connector.insert_sensor_image_data(
-            device_id, yyyymmddhhmmss, image_path
-        )
+        self.db_connector.insert_sensor_image_data(device_id, yyyymmddhhmmss, image_path)
 
     def fetch_latest(self, device_id: str, limit: int = 1):
         sensor_images = self.db_connector.fetch_sensor_latest_image(device_id, limit)
@@ -41,10 +37,7 @@ class SensorImageRepogitory:
                     "device_id": device_id,
                     "yyyymmddhhmmss": yyyymmddhhmmss,
                     "image_path": image_path,
-                    "created_at": datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
-                    .replace(tzinfo=timezone.utc)
-                    .astimezone()
-                    .strftime("%Y-%m-%d %H:%M:%S"),
+                    "created_at": datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
                 }
             )
         return sensor_images_as_dict

@@ -37,17 +37,11 @@ class SensorDataRepository:
         # whether aggregate or not
         # older than 1hours
         for yyyymmdd_hh in list(self.tmp_sensor_data_dict[device_id].keys()):
-            if datetime.strptime(yyyymmdd_hh, "%Y%m%d%H").replace(
-                tzinfo=timezone.utc
-            ) < (datetime.now(timezone.utc) - timedelta(hours=1)):
-                logger.info(
-                    f"aggregate data: device_id={device_id}, yyyymmdd_hh={yyyymmdd_hh}"
-                )
+            if datetime.strptime(yyyymmdd_hh, "%Y%m%d%H").replace(tzinfo=timezone.utc) < (datetime.now(timezone.utc) - timedelta(hours=1)):
+                logger.info(f"aggregate data: device_id={device_id}, yyyymmdd_hh={yyyymmdd_hh}")
                 aggregated_data = self.__aggregate_data(device_id, yyyymmdd_hh)
                 if aggregated_data:
-                    self.__insert_aggreated_data(
-                        device_id, yyyymmdd_hh, aggregated_data
-                    )
+                    self.__insert_aggreated_data(device_id, yyyymmdd_hh, aggregated_data)
                     del self.tmp_sensor_data_dict[device_id][yyyymmdd_hh]
                     self.__save_tmp_sensor_data()
 
@@ -56,10 +50,10 @@ class SensorDataRepository:
         if data_as_tupple is None:
             return None
 
-        # device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, created_at, updated_at, extra
+        # sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, created_at, updated_at, extra
         try:
-            extra = json.loads(data_as_tupple[10])
-        except json.JSONDecodeError:
+            extra = json.loads(data_as_tupple[10] or "{}")
+        except (TypeError, json.JSONDecodeError):
             extra = {}
         telemetry = extra.get("telemetry", {}) if isinstance(extra, dict) else {}
         return {
@@ -71,12 +65,8 @@ class SensorDataRepository:
             "dissolved_oxygen": data_as_tupple[5],
             "ammonia": data_as_tupple[6],
             "nitrate": data_as_tupple[7],
-            "created_at": datetime.strptime(data_as_tupple[8], "%Y-%m-%d %H:%M:%S")
-            .replace(tzinfo=timezone.utc)
-            .astimezone(),
-            "updated_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S")
-            .replace(tzinfo=timezone.utc)
-            .astimezone(),
+            "created_at": datetime.strptime(data_as_tupple[8], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).astimezone(),
+            "updated_at": datetime.strptime(data_as_tupple[9], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).astimezone(),
             "extra": extra,
             "telemetry": telemetry,
         }
@@ -86,12 +76,12 @@ class SensorDataRepository:
         if data is None:
             return None
 
-        # device_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra
+        # sensor_id, temp, tds, ec, ph, dissolved_oxygen, ammonia, nitrate, yyyymmddhh, created_at, extra
         ret = []
         for d in data:
             try:
-                extra = json.loads(d[10])
-            except json.JSONDecodeError:
+                extra = json.loads(d[10] or "{}")
+            except (TypeError, json.JSONDecodeError):
                 extra = {}
             ret.append(
                 {
@@ -103,9 +93,7 @@ class SensorDataRepository:
                     "dissolved_oxygen": d[5],
                     "ammonia": d[6],
                     "nitrate": d[7],
-                    "yyyymmddhh": datetime.strptime(str(d[8]), "%Y%m%d%H")
-                    .replace(tzinfo=timezone.utc)
-                    .astimezone(),
+                    "yyyymmddhh": datetime.strptime(str(d[8]), "%Y%m%d%H").replace(tzinfo=timezone.utc).astimezone(),
                     "created_at": d[9],
                     "extra": extra,
                 }

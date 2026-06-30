@@ -6,9 +6,7 @@ from ina_device_hub.setting import setting
 
 
 class CameraDeviceRepository:
-    camera_device_repo_path = os.path.join(
-        setting().get_work_dir(), ".camera_device_list.json"
-    )
+    camera_device_repo_path = os.path.join(setting().get_work_dir(), ".camera_device_list.json")
 
     def __init__(self):
         self.camera_dict = {}

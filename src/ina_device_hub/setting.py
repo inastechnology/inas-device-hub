@@ -33,6 +33,7 @@ except KeyError as e:
 
 try:
     LOCAL_STORAGE_BASE_DIR = os.environ["LOCAL_STORAGE_BASE_DIR"]
+    LOCAL_STORAGE_BASE_DIR = os.path.expanduser(LOCAL_STORAGE_BASE_DIR)
 except KeyError:
     LOCAL_STORAGE_BASE_DIR = "./.data/storage"
 
@@ -78,13 +79,30 @@ try:
 except KeyError:
     sys.exit("Please set TIMELAPSE_INTERVAL in .env file")
 
+DEFAULT_JMA_WEATHER_FEED_URL = "https://www.data.jma.go.jp/developer/xml/feed/regular.xml"
+WEATHER_RECORD_ENABLED = bool("true" == os.environ.get("WEATHER_RECORD_ENABLED", "true").lower())
+WEATHER_RECORD_INTERVAL_SECONDS = int(os.environ.get("WEATHER_RECORD_INTERVAL_SECONDS", "21600"))
+WEATHER_PROVIDER = os.environ.get("WEATHER_PROVIDER", "open_meteo").strip()
+WEATHER_LATITUDE = float(os.environ.get("WEATHER_LATITUDE", "33.90366750991095"))
+WEATHER_LONGITUDE = float(os.environ.get("WEATHER_LONGITUDE", "133.1918432786152"))
+WEATHER_TIMEZONE = os.environ.get("WEATHER_TIMEZONE", "Asia/Tokyo").strip()
+WEATHER_BACKFILL_DAYS = int(os.environ.get("WEATHER_BACKFILL_DAYS", "7"))
+WEATHER_OPEN_METEO_ARCHIVE_URL = os.environ.get("WEATHER_OPEN_METEO_ARCHIVE_URL", "https://archive-api.open-meteo.com/v1/archive").strip()
+WEATHER_FORECAST_URL = os.environ.get("WEATHER_FORECAST_URL", os.environ.get("INSTAGRAM_WEATHER_FORECAST_URL", DEFAULT_JMA_WEATHER_FEED_URL)).strip()
+WEATHER_AREA_NAME = os.environ.get("WEATHER_AREA_NAME", os.environ.get("INSTAGRAM_WEATHER_AREA_NAME", "東予")).strip()
+WEATHER_OFFICE_NAME = os.environ.get("WEATHER_OFFICE_NAME", os.environ.get("INSTAGRAM_WEATHER_OFFICE_NAME", "松山地方気象台")).strip()
+WEATHER_FORECAST_TITLE = os.environ.get("WEATHER_FORECAST_TITLE", os.environ.get("INSTAGRAM_WEATHER_FORECAST_TITLE", "府県天気予報")).strip()
+
 INSTAGRAM_USER_ID = os.environ.get("INSTAGRAM_USER_ID", "").strip()
 INSTAGRAM_ACCESS_TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
 INSTAGRAM_SENSOR_ID = os.environ.get("INSTAGRAM_SENSOR_ID", "").strip()
 INSTAGRAM_CAMERA_ID = os.environ.get("INSTAGRAM_CAMERA_ID", "").strip()
-INSTAGRAM_PLANT_POSITION_PROMPT = os.environ.get(
-    "INSTAGRAM_PLANT_POSITION_PROMPT", ""
-).strip()
+INSTAGRAM_PLANT_POSITION_PROMPT = os.environ.get("INSTAGRAM_PLANT_POSITION_PROMPT", "").strip()
+INSTAGRAM_ADMIN_USERNAME = os.environ.get("INSTAGRAM_ADMIN_USERNAME", "").strip()
+INSTAGRAM_WEATHER_FORECAST_URL = os.environ.get("INSTAGRAM_WEATHER_FORECAST_URL", WEATHER_FORECAST_URL).strip()
+INSTAGRAM_WEATHER_AREA_NAME = os.environ.get("INSTAGRAM_WEATHER_AREA_NAME", WEATHER_AREA_NAME).strip()
+INSTAGRAM_WEATHER_OFFICE_NAME = os.environ.get("INSTAGRAM_WEATHER_OFFICE_NAME", WEATHER_OFFICE_NAME).strip()
+INSTAGRAM_WEATHER_FORECAST_TITLE = os.environ.get("INSTAGRAM_WEATHER_FORECAST_TITLE", WEATHER_FORECAST_TITLE).strip()
 
 AI_ENABLED = bool("true" == os.environ.get("AI_ENABLED", "false").lower())
 AI_AGENT_SCHEDULE_START = os.environ.get("AI_AGENT_SCHEDULE_START", "09:01").strip()
@@ -142,12 +160,31 @@ DEFAULT_SETTINGS = {
     },
     "local_storage_base_dir": LOCAL_STORAGE_BASE_DIR,
     "timelapse_interval": TIMELAPSE_INTERVAL,
+    "weather": {
+        "record_enabled": WEATHER_RECORD_ENABLED,
+        "record_interval_seconds": WEATHER_RECORD_INTERVAL_SECONDS,
+        "provider": WEATHER_PROVIDER,
+        "latitude": WEATHER_LATITUDE,
+        "longitude": WEATHER_LONGITUDE,
+        "timezone": WEATHER_TIMEZONE,
+        "backfill_days": WEATHER_BACKFILL_DAYS,
+        "open_meteo_archive_url": WEATHER_OPEN_METEO_ARCHIVE_URL,
+        "forecast_url": WEATHER_FORECAST_URL,
+        "area_name": WEATHER_AREA_NAME,
+        "office_name": WEATHER_OFFICE_NAME,
+        "forecast_title": WEATHER_FORECAST_TITLE,
+    },
     "instagram": {
         "user_id": INSTAGRAM_USER_ID,
         "access_token": INSTAGRAM_ACCESS_TOKEN,
         "sensor_id": INSTAGRAM_SENSOR_ID,
         "camera_id": INSTAGRAM_CAMERA_ID,
         "plant_position_prompt": INSTAGRAM_PLANT_POSITION_PROMPT,
+        "admin_username": INSTAGRAM_ADMIN_USERNAME,
+        "weather_forecast_url": INSTAGRAM_WEATHER_FORECAST_URL,
+        "weather_area_name": INSTAGRAM_WEATHER_AREA_NAME,
+        "weather_office_name": INSTAGRAM_WEATHER_OFFICE_NAME,
+        "weather_forecast_title": INSTAGRAM_WEATHER_FORECAST_TITLE,
     },
     "mqtt": {
         "mqtt_broker": MQTT_BROKER_URL,

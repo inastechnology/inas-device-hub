@@ -10,12 +10,12 @@ from ina_device_hub.sensor_data_repository import sensor_data_repository
 from ina_device_hub.sensor_image_repogitory import sensor_image_repogitory
 from ina_device_hub.sensor_data_queue import SensorDataQueue
 from ina_device_hub.ina_db_connector import InaDBConnector
+from ina_device_hub.device_event_log import append_device_event
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
 
 
 class DataProcessor:
-
     def __init__(self, db_connector: InaDBConnector = None):
         if db_connector is None:
             db_connector = InaDBConnector()
@@ -72,9 +72,7 @@ class DataProcessor:
                     pass
                 else:
                     # 規定外のメッセージの場合はログ出力
-                    print(
-                        f"Device {message['device_id']} sensor data: {message['payload']}"
-                    )
+                    print(f"Device {message['device_id']} sensor data: {message['payload']}")
                 # キューからメッセージを取り出し完了
                 self.sensor_data_queue.task_done()
             except queue.Empty:
@@ -105,6 +103,14 @@ class DataProcessor:
 
         # 文字列から辞書型に変換
         payload_as_dict = json.loads(payload)
+        append_device_event(
+            "sensor_status",
+            "inbound",
+            device_id,
+            kind=kind,
+            seq_id=seqId,
+            payload=payload_as_dict,
+        )
 
         self.sensor_data_repository.add(device_id, seqId, payload_as_dict)
 
@@ -114,6 +120,13 @@ class DataProcessor:
 
         print(f"Device {device_id} telemetry: {payload}")
         payload_as_dict = json.loads(payload)
+        append_device_event(
+            "sensor_telemetry",
+            "inbound",
+            device_id,
+            kind="telemetry",
+            payload=payload_as_dict,
+        )
         normalized_payload = self._normalize_farm_telemetry(device_id, payload_as_dict)
         self.sensor_data_repository.add(device_id, None, normalized_payload)
 
@@ -188,10 +201,7 @@ class DataProcessor:
 
         self.image_buffer[device_id][seqId]["image"].extend(image_fragment)
         # check whether all image data received
-        if (
-            len(self.image_buffer[device_id][seqId]["image"])
-            >= self.image_buffer[device_id][seqId]["size"]
-        ):
+        if len(self.image_buffer[device_id][seqId]["image"]) >= self.image_buffer[device_id][seqId]["size"]:
             # all image data received
             print(f"[{device_id}:{seqId}] all image data received")
             # all image data received
@@ -234,10 +244,7 @@ class DataProcessor:
         self.audio_buffer[device_id][seqId]["audio"].extend(audio_fragment)
         self.audio_buffer[device_id][seqId]["count"] += 1
         # check whether all audio data received
-        if (
-            self.audio_buffer[device_id][seqId]["count"]
-            >= self.audio_buffer[device_id][seqId]["all_count"]
-        ):
+        if self.audio_buffer[device_id][seqId]["count"] >= self.audio_buffer[device_id][seqId]["all_count"]:
             # all audio data received
             print(f"[{device_id}:{seqId}] all audio data received")
             # all audio data received

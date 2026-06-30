@@ -71,6 +71,9 @@ class TimelapseMediaService:
         start_at: datetime | None = None,
         end_at: datetime | None = None,
         fps: int = 12,
+        max_width: int | None = None,
+        max_height: int | None = None,
+        video_bitrate: str | None = None,
     ):
         frame_paths = self.list_frames(
             device_id,
@@ -92,19 +95,38 @@ class TimelapseMediaService:
             input_pattern = os.path.join(staging_dir, "frame_%06d.jpg")
             try:
                 video_input = ffmpeg.input(input_pattern, framerate=fps, start_number=1)
-                cropped_video = video_input.filter(
+                video_output = video_input.filter(
                     "crop",
                     f"min(iw,ih*{self.VIDEO_ASPECT_RATIO_WIDTH}/{self.VIDEO_ASPECT_RATIO_HEIGHT})",
                     f"min(ih,iw*{self.VIDEO_ASPECT_RATIO_HEIGHT}/{self.VIDEO_ASPECT_RATIO_WIDTH})",
                     "(iw-ow)/2",
                     "(ih-oh)/2",
-                ).filter("scale", "trunc(iw/2)*2", "trunc(ih/2)*2")
+                )
+                if max_width and max_height:
+                    video_output = video_output.filter(
+                        "scale",
+                        f"min(iw,{max_width})",
+                        f"min(ih,{max_height})",
+                        force_original_aspect_ratio="decrease",
+                    )
+                video_output = video_output.filter(
+                    "scale",
+                    "trunc(iw/2)*2",
+                    "trunc(ih/2)*2",
+                ).filter("format", "yuv420p")
+
+                output_options = {
+                    "vcodec": "libx264",
+                    "pix_fmt": "yuv420p",
+                    "movflags": "+faststart",
+                }
+                if video_bitrate:
+                    output_options["video_bitrate"] = video_bitrate
+
                 (
-                    cropped_video.output(
+                    video_output.output(
                         output_path,
-                        vcodec="libx264",
-                        pix_fmt="yuv420p",
-                        movflags="+faststart",
+                        **output_options,
                     )
                     .overwrite_output()
                     .run(capture_stdout=True, capture_stderr=True)

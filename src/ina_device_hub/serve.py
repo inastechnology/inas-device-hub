@@ -4,6 +4,7 @@ from ina_device_hub.device_config_service import device_config_service
 from ina_device_hub.hub_mqtt_client import HubMQTTClient
 from ina_device_hub.instagram_post_task import instagram_post_task
 from ina_device_hub.timelapse_task import timelapse_task
+from ina_device_hub.weather_record_task import weather_record_task
 
 
 def run():
@@ -25,6 +26,7 @@ def run():
 
     # timelapse task
     timelapse_task().start()
+    weather_record_task().start()
     instagram_post_task().start()
 
     # Flaskサーバーを起動

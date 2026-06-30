@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 import ffmpeg
 
 from ina_device_hub.camera_device_repository import camera_device_repository
@@ -5,6 +7,10 @@ from ina_device_hub.general_log import logger
 
 
 class CameraConnector:
+    DEFAULT_CAMERA_TYPE = "tapo"
+    REOLINK_MAIN_STREAM = "main"
+    REOLINK_SUB_STREAM = "sub"
+
     def __init__(self):
         self.camera_device_repository = camera_device_repository()
 
@@ -18,9 +24,7 @@ class CameraConnector:
             # RTSP の入力を受け取り、出力先をパイプに設定。
             # format='image2' で画像出力、vframes=1 で1フレームのみ取得
             img_bytes, _ = (
-                ffmpeg.input(rtsp_url, rtsp_transport="tcp")
-                .output("pipe:", format="image2", vframes=1)
-                .run(capture_stdout=True, capture_stderr=True)
+                ffmpeg.input(rtsp_url, rtsp_transport="tcp").output("pipe:", format="image2", vframes=1).run(capture_stdout=True, capture_stderr=True)
             )
             if not img_bytes:
                 logger.error(f"Failed to take picture: {device_id}")
@@ -38,11 +42,7 @@ class CameraConnector:
             return None
         logger.info(f"Starting RTSP stream from {device_id}")
         # ffmpeg プロセスを非同期実行（MJPEG 形式で出力）
-        process = (
-            ffmpeg.input(rtsp_url, rtsp_transport="tcp")
-            .output("pipe:", format="mjpeg", r=10)
-            .run_async(pipe_stdout=True, pipe_stderr=True)
-        )
+        process = ffmpeg.input(rtsp_url, rtsp_transport="tcp").output("pipe:", format="mjpeg", r=10).run_async(pipe_stdout=True, pipe_stderr=True)
         if process.poll() is not None:
             logger.error("Failed to start ffmpeg process")
             return
@@ -66,16 +66,49 @@ class CameraConnector:
         username = info.get("username")
         password = info.get("password")
         if not ip_address or not username or not password:
-            logger.error(
-                f"Invalid device info: ip_address={ip_address}, username={username}, password=[REDACTED]"
-            )
+            logger.error(f"Invalid device info: ip_address={ip_address}, username={username}, password=[REDACTED]")
             return None
 
-        return self.get_rtsp_url(ip_address, username, password)
+        return self.get_rtsp_url(
+            ip_address,
+            username,
+            password,
+            camera_type=info.get("camera_type") or info.get("type") or self.DEFAULT_CAMERA_TYPE,
+            channel=info.get("channel", 1),
+            stream=info.get("stream", self.REOLINK_MAIN_STREAM),
+            rtsp_path=info.get("rtsp_path"),
+        )
 
     @staticmethod
-    def get_rtsp_url(ip_address: str, username: str, password: str):
-        return f"rtsp://{username}:{password}@{ip_address}/stream1"
+    def get_rtsp_url(
+        ip_address: str,
+        username: str,
+        password: str,
+        camera_type: str = DEFAULT_CAMERA_TYPE,
+        channel: int | str = 1,
+        stream: str = REOLINK_MAIN_STREAM,
+        rtsp_path: str | None = None,
+    ):
+        encoded_username = quote(username, safe="")
+        encoded_password = quote(password, safe="")
+        authority = f"{encoded_username}:{encoded_password}@{ip_address}"
+
+        if rtsp_path:
+            normalized_path = rtsp_path if rtsp_path.startswith("/") else f"/{rtsp_path}"
+            return f"rtsp://{authority}{normalized_path}"
+
+        normalized_camera_type = camera_type.lower().strip()
+        if normalized_camera_type == "reolink":
+            normalized_stream = stream.lower().strip()
+            if normalized_stream not in {CameraConnector.REOLINK_MAIN_STREAM, CameraConnector.REOLINK_SUB_STREAM}:
+                raise ValueError(f"Unsupported Reolink stream: {stream}")
+            channel_number = int(channel)
+            return f"rtsp://{authority}/Preview_{channel_number:02d}_{normalized_stream}"
+
+        if normalized_camera_type == "tapo":
+            return f"rtsp://{authority}/stream1"
+
+        raise ValueError(f"Unsupported camera_type: {camera_type}")
 
     @staticmethod
     def generate_frames(device_id):
@@ -96,16 +129,11 @@ class CameraConnector:
                     if start != -1 and end != -1 and end > start:
                         frame = buffer[start : end + 2]
                         buffer = buffer[end + 2 :]
-                        yield (
-                            b"--frame\r\n"
-                            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-                        )
+                        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
                     else:
                         break
         except GeneratorExit:
-            logger.info(
-                f"[{device_id}]Rtsp client disconnected. Stopping ffmpeg process"
-            )
+            logger.info(f"[{device_id}]Rtsp client disconnected. Stopping ffmpeg process")
         except Exception as e:
             logger.error(f"Error: {e}")
             raise
@@ -117,7 +145,7 @@ __instance = None
 
 
 def camera_connector():
-    global __instance
+    global __instance  # noqa: PLW0603
     if not __instance:
         __instance = CameraConnector()
 
