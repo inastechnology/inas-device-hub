@@ -2,6 +2,7 @@ import threading
 
 from paho.mqtt import client as mqtt_client
 
+from ina_device_hub.device_event_log import append_mqtt_hub_event, append_mqtt_message_event
 from ina_device_hub.discord_notification_service import discord_notification_service
 from ina_device_hub.general_log import logger
 from ina_device_hub.setting import setting
@@ -26,9 +27,11 @@ class HubMQTTClient:
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
                 print("Connected to MQTT Broker!")
+                append_mqtt_hub_event("mqtt_hub_connected", "outbound", topic="$SYS/ina-device-hub/mqtt", payload={"broker": setting().get("mqtt")["mqtt_broker"]})
                 self.discord_notification_service.notify_mqtt_activity("connected", "$SYS/ina-device-hub/mqtt", payload={"broker": setting().get("mqtt")["mqtt_broker"]})
             else:
                 print("Failed to connect, return code %d\n", rc)
+                append_mqtt_hub_event("mqtt_hub_connect_failed", "outbound", topic="$SYS/ina-device-hub/mqtt", payload={"return_code": rc}, mqtt_rc=rc)
                 self.discord_notification_service.notify_mqtt_activity("connect_failed", "$SYS/ina-device-hub/mqtt", payload={"return_code": rc})
 
         client = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id)
@@ -85,6 +88,14 @@ class HubMQTTClient:
                 "payload": payload,
             }
 
+        if len(parts) >= 4 and parts[0] == "$SYS" and parts[1] == "broker" and parts[2] == "log":
+            return {
+                "message_type": "mqtt_broker_log",
+                "topic": topic,
+                "kind": parts[3],
+                "payload": payload,
+            }
+
         return {"message_type": "unknown", "topic": topic, "payload": payload}
 
     def subscribe(self, topic: str):
@@ -92,6 +103,7 @@ class HubMQTTClient:
             omitted_payload = f"{msg.payload[0:100]}..." if len(msg.payload) > 100 else msg.payload
             print(f"Received `{omitted_payload}` from `{msg.topic}` topic")
             parsed_message = self._parse_message(msg.topic, msg.payload)
+            append_mqtt_message_event(parsed_message)
             self.discord_notification_service.notify_mqtt_activity("received", msg.topic, payload=msg.payload, parsed_message=parsed_message)
 
             for handler in self.message_handlers:

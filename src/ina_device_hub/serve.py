@@ -17,6 +17,7 @@ def run():
     hub_mqtt_client.subscribe("sensor/+/#")
     hub_mqtt_client.subscribe("/+/kinds/config/request")
     hub_mqtt_client.subscribe("/+/kinds/agri/immediate")
+    hub_mqtt_client.subscribe("$SYS/broker/log/#")
 
     # メッセージ処理用のワーカースレッドを開始
     data_processor.start()

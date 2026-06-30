@@ -1,5 +1,7 @@
+import json
 import os
 import uuid
+from html import escape
 from datetime import UTC, datetime, timedelta
 
 from flask import Flask, Response, jsonify, render_template, render_template_string, request
@@ -7,6 +9,7 @@ from flask import Flask, Response, jsonify, render_template, render_template_str
 from ina_device_hub.camera_connector import camera_connector
 from ina_device_hub.device_config_repository import DeviceConfigValidationError, DeviceRecordValidationError
 from ina_device_hub.device_config_service import device_config_service
+from ina_device_hub.device_event_log import list_device_events
 from ina_device_hub.location_repository import location_repository
 from ina_device_hub.sensor_data_repository import sensor_data_repository
 from ina_device_hub.sensor_device_repository import sensor_device_repository
@@ -76,6 +79,7 @@ def index():
       <body>
         <h1>INA Device Hub</h1>
         <h2>Devices</h2>
+        <p><a href="/mqtt-devices">MQTT Devices</a></p>
         <ul>
           {% for device_id, info in devices.items() %}
           <li>
@@ -355,6 +359,75 @@ def preview_camera(device_id):
     return render_template_string(html, device_id=device_id)
 
 
+@app.route("/mqtt-devices", methods=["GET"])
+def mqtt_devices_page():
+    device_id = request.args.get("device_id")
+    devices = device_config_service().get_all_records()
+    selected_device_id = device_id or next(iter(devices), None)
+    selected_device = devices.get(selected_device_id) if selected_device_id else None
+    recent_events = list_device_events(limit=50, device_id=selected_device_id) if selected_device_id else list_device_events(limit=50)
+    connection_events = list_device_events(limit=50, device_id=selected_device_id, connection_events_only=True) if selected_device_id else list_device_events(limit=50, connection_events_only=True)
+    template = """
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>MQTT Devices</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #1f2933; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+          th, td { border: 1px solid #d9e2ec; padding: 6px 8px; vertical-align: top; font-size: 14px; }
+          th { background: #f0f4f8; text-align: left; }
+          pre { white-space: pre-wrap; word-break: break-word; background: #f7f9fb; border: 1px solid #d9e2ec; padding: 10px; }
+          .nav a { margin-right: 12px; }
+        </style>
+      </head>
+      <body>
+        <h1>MQTT Devices</h1>
+        <p class="nav"><a href="/">Home</a><a href="/local/api/mqtt-devices">Devices API</a><a href="/local/api/mqtt-events">Events API</a><a href="/local/api/mqtt-connections">Connections API</a></p>
+        <h2>Registered Devices</h2>
+        <table>
+          <thead>
+            <tr><th>device_id</th><th>state</th><th>last config request</th><th>last status</th><th>current config</th></tr>
+          </thead>
+          <tbody>
+            {% for id, record in devices.items() %}
+            <tr>
+              <td><a href="/mqtt-devices?device_id={{ id }}">{{ id }}</a></td>
+              <td>{{ record.state }}</td>
+              <td>{{ record.last_config_request_at }}</td>
+              <td>{{ record.last_status_at }}</td>
+              <td><pre>{{ format_json(record.config) }}</pre></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if selected_device %}
+        <h2>Selected Device</h2>
+        <p><strong>{{ selected_device_id }}</strong></p>
+        <h3>Current Runtime Config</h3>
+        <pre>{{ format_json(selected_device.config) }}</pre>
+        <h3>Connection History</h3>
+        {{ render_events(connection_events) | safe }}
+        <h3>MQTT Event History</h3>
+        {{ render_events(recent_events) | safe }}
+        {% endif %}
+      </body>
+    </html>
+    """
+
+    return render_template_string(
+        template,
+        devices=devices,
+        selected_device_id=selected_device_id,
+        selected_device=selected_device,
+        connection_events=connection_events,
+        recent_events=recent_events,
+        format_json=_format_json,
+        render_events=_render_event_table,
+    )
+
+
 # ==========================================
 # Local API
 # ==========================================
@@ -368,6 +441,29 @@ def get_devices():
 def get_locations():
     locations = location_repository().get_all()
     return jsonify(locations)
+
+
+@app.route("/local/api/mqtt-events", methods=["GET"])
+def list_mqtt_events():
+    return jsonify(
+        list_device_events(
+            limit=_request_limit(default=100, maximum=1000),
+            device_id=request.args.get("device_id"),
+            event_type=request.args.get("event_type"),
+            direction=request.args.get("direction"),
+        )
+    )
+
+
+@app.route("/local/api/mqtt-connections", methods=["GET"])
+def list_mqtt_connections():
+    return jsonify(
+        list_device_events(
+            limit=_request_limit(default=100, maximum=1000),
+            device_id=request.args.get("device_id"),
+            connection_events_only=True,
+        )
+    )
 
 
 @app.route("/local/api/device-configs", methods=["GET"])
@@ -497,3 +593,33 @@ def video_feed(device_id):
 
 def flask_run():
     app.run(host="0.0.0.0", port=5151)
+
+
+def _request_limit(default: int = 100, maximum: int = 1000):
+    try:
+        limit = int(request.args.get("limit", str(default)))
+    except ValueError:
+        return default
+    return max(1, min(limit, maximum))
+
+
+def _format_json(value):
+    return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+def _render_event_table(events):
+    if not events:
+        return "<p>No events</p>"
+    rows = []
+    for event in reversed(events):
+        payload = escape(_format_json(event.get("payload")))
+        rows.append(
+            "<tr>"
+            f"<td>{escape(str(event.get('occurred_at') or ''))}</td>"
+            f"<td>{escape(str(event.get('event_type') or ''))}</td>"
+            f"<td>{escape(str(event.get('direction') or ''))}</td>"
+            f"<td>{escape(str(event.get('topic') or ''))}</td>"
+            f"<td><pre>{payload}</pre></td>"
+            "</tr>"
+        )
+    return "<table><thead><tr><th>time</th><th>event</th><th>direction</th><th>topic</th><th>payload</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"

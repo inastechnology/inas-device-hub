@@ -29,9 +29,21 @@ def commit_and_sync(func):
         finally:
             print("Commit and sync")
             self.conn.commit()
-            self.conn.sync()
+            _sync_if_supported(self.conn)
 
     return wrapper
+
+
+def _is_sync_url(url: str | None):
+    return bool(url and (url.startswith("libsql://") or url.startswith("http://") or url.startswith("https://")))
+
+
+def _sync_if_supported(conn):
+    try:
+        conn.sync()
+    except ValueError as exc:
+        if "Sync is not supported" not in str(exc):
+            raise
 
 
 class InaDBConnector:
@@ -40,8 +52,109 @@ class InaDBConnector:
         db_path = turso_settings.get("local_db_path")
         url = turso_settings.get("database_url")
         auth_token = turso_settings.get("auth_token")
-        self.conn = libsql.connect(db_path, sync_url=url, auth_token=auth_token)
-        self.conn.sync()
+        if _is_sync_url(url):
+            self.conn = libsql.connect(db_path, sync_url=url, auth_token=auth_token)
+            self.conn.sync()
+        else:
+            self.conn = libsql.connect(db_path)
+        self.ensure_device_event_table()
+
+    def ensure_device_event_table(self):
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                occurred_at TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                device_id TEXT,
+                topic TEXT,
+                category TEXT,
+                action TEXT,
+                kind TEXT,
+                seq_id TEXT,
+                mqtt_rc INTEGER,
+                retain INTEGER,
+                next_sleep_sec REAL,
+                next_wake_at TEXT,
+                payload TEXT
+            )
+            """
+        )
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_device_events_occurred_at ON device_events (occurred_at)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_device_events_device_id ON device_events (device_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_device_events_event_type ON device_events (event_type)")
+        self.conn.commit()
+        _sync_if_supported(self.conn)
+
+    @commit_and_sync
+    def insert_device_event(self, event: dict):
+        self.conn.execute(
+            """
+            INSERT INTO device_events (
+                occurred_at, event_type, direction, device_id, topic, category, action, kind,
+                seq_id, mqtt_rc, retain, next_sleep_sec, next_wake_at, payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.get("occurred_at"),
+                event.get("event_type"),
+                event.get("direction"),
+                event.get("device_id"),
+                event.get("topic"),
+                event.get("category"),
+                event.get("action"),
+                event.get("kind"),
+                str(event.get("seq_id")) if event.get("seq_id") is not None else None,
+                event.get("mqtt_rc"),
+                int(event["retain"]) if event.get("retain") is not None else None,
+                event.get("next_sleep_sec"),
+                event.get("next_wake_at"),
+                json.dumps(event.get("payload"), ensure_ascii=True, separators=(",", ":")),
+            ),
+        )
+
+    def fetch_device_events(
+        self,
+        *,
+        limit: int = 100,
+        device_id: str = None,
+        event_type: str = None,
+        direction: str = None,
+        connection_events_only: bool = False,
+    ):
+        where = []
+        params = []
+        if device_id:
+            where.append("device_id = ?")
+            params.append(device_id)
+        if event_type:
+            where.append("event_type = ?")
+            params.append(event_type)
+        if direction:
+            where.append("direction = ?")
+            params.append(direction)
+        if connection_events_only:
+            where.append(
+                "event_type IN ("
+                "'mqtt_client_connected',"
+                "'mqtt_client_disconnected',"
+                "'mqtt_client_connection_attempt',"
+                "'mqtt_broker_log',"
+                "'mqtt_hub_connected',"
+                "'mqtt_hub_connect_failed'"
+                ")"
+            )
+
+        query = (
+            "SELECT id, occurred_at, event_type, direction, device_id, topic, category, action, kind, seq_id, mqtt_rc, retain, next_sleep_sec, next_wake_at, payload "
+            "FROM device_events"
+        )
+        if where:
+            query += " WHERE " + " AND ".join(where)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        return self.conn.execute(query, tuple(params)).fetchall()
 
     @commit_and_sync
     def upsert_device_info(
