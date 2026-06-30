@@ -20,6 +20,8 @@ shift || true
 SOURCE_DIR="$REPO_ROOT"
 TARGET_DIR="$REPO_ROOT"
 WORK_DIR="${WORK_DIR:-$HOME/.ina-device-hub}"
+SOURCE_WORK_DIR="$WORK_DIR"
+TARGET_WORK_DIR="$WORK_DIR"
 INCLUDE_WORK_DIR=false
 DRY_RUN=false
 OVERWRITE=false
@@ -32,6 +34,7 @@ Usage:
   $0 export-zip ZIP_PATH [--source-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
   $0 import ARCHIVE_DIR [--target-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
   $0 import-zip ZIP_PATH [--target-dir DIR] [--work-dir DIR] [--include-work-dir] [--dry-run] [--overwrite]
+  $0 move-device [--source-dir DIR] [--target-dir DIR] [--source-work-dir DIR] [--target-work-dir DIR] [--dry-run] [--overwrite] [--no-work-dir]
 
 Commands:
   list        Show local files that would be migrated
@@ -39,12 +42,16 @@ Commands:
   export-zip  Copy local files into a portable zip archive
   import      Copy local files from ARCHIVE_DIR into this repository
   import-zip  Restore local files from a zip archive
+  move-device Copy local files directly from one device checkout to another
 
 Options:
   --source-dir DIR       Repository directory to export from
   --target-dir DIR       Repository directory to import into
   --work-dir DIR         Runtime WORK_DIR path; default: \$WORK_DIR or ~/.ina-device-hub
+  --source-work-dir DIR  Runtime WORK_DIR path on the source device
+  --target-work-dir DIR  Runtime WORK_DIR path on the target device
   --include-work-dir     Also copy the runtime WORK_DIR into archive/work_dir
+  --no-work-dir          For move-device, skip copying runtime WORK_DIR
   --dry-run              Print actions without copying
   --overwrite            Replace existing files at the destination
 EOF
@@ -165,10 +172,28 @@ parse_common_options() {
       --work-dir)
         require_arg "$1" "${2:-}"
         WORK_DIR="$(resolve_path "$2")"
+        SOURCE_WORK_DIR="$WORK_DIR"
+        TARGET_WORK_DIR="$WORK_DIR"
+        shift 2
+        ;;
+      --source-work-dir)
+        require_arg "$1" "${2:-}"
+        SOURCE_WORK_DIR="$(resolve_path "$2")"
+        INCLUDE_WORK_DIR=true
+        shift 2
+        ;;
+      --target-work-dir)
+        require_arg "$1" "${2:-}"
+        TARGET_WORK_DIR="$(resolve_path "$2")"
+        INCLUDE_WORK_DIR=true
         shift 2
         ;;
       --include-work-dir)
         INCLUDE_WORK_DIR=true
+        shift
+        ;;
+      --no-work-dir)
+        INCLUDE_WORK_DIR=false
         shift
         ;;
       --dry-run)
@@ -193,7 +218,7 @@ parse_common_options() {
 case "$COMMAND" in
   list)
     parse_common_options "$@"
-    print_list "$SOURCE_DIR" "$WORK_DIR"
+    print_list "$SOURCE_DIR" "$SOURCE_WORK_DIR"
     ;;
   export)
     ARCHIVE_DIR="${1:-}"
@@ -202,6 +227,7 @@ case "$COMMAND" in
     ARCHIVE_DIR="$(resolve_path "$ARCHIVE_DIR")"
     parse_common_options "$@"
 
+    WORK_DIR="$SOURCE_WORK_DIR"
     export_to_dir "$ARCHIVE_DIR"
     ;;
   export-zip)
@@ -217,6 +243,7 @@ case "$COMMAND" in
 
     echo "Exporting local files to zip: $ZIP_PATH"
     if [[ "$DRY_RUN" == true ]]; then
+      WORK_DIR="$SOURCE_WORK_DIR"
       export_to_dir "$(dirname "$ZIP_PATH")/$(basename "$ZIP_PATH" .zip)"
       echo "zip: $(dirname "$ZIP_PATH")/$(basename "$ZIP_PATH" .zip) -> $ZIP_PATH"
       exit 0
@@ -225,6 +252,7 @@ case "$COMMAND" in
     require_command zip
     TMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TMP_DIR"' EXIT
+    WORK_DIR="$SOURCE_WORK_DIR"
     export_to_dir "$TMP_DIR/archive"
     mkdir -p "$(dirname "$ZIP_PATH")"
     if [[ -e "$ZIP_PATH" && "$OVERWRITE" == true ]]; then
@@ -239,6 +267,7 @@ case "$COMMAND" in
     ARCHIVE_DIR="$(resolve_path "$ARCHIVE_DIR")"
     parse_common_options "$@"
 
+    WORK_DIR="$TARGET_WORK_DIR"
     import_from_dir "$ARCHIVE_DIR"
     ;;
   import-zip)
@@ -255,7 +284,7 @@ case "$COMMAND" in
       unzip -Z1 "$ZIP_PATH" | sed 's/^/zip entry: /'
       echo "dry-run import target: $TARGET_DIR"
       if [[ "$INCLUDE_WORK_DIR" == true ]]; then
-        echo "dry-run work dir target: $WORK_DIR"
+        echo "dry-run work dir target: $TARGET_WORK_DIR"
       fi
       exit 0
     fi
@@ -264,7 +293,29 @@ case "$COMMAND" in
     TMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TMP_DIR"' EXIT
     unzip -q "$ZIP_PATH" -d "$TMP_DIR/archive"
+    WORK_DIR="$TARGET_WORK_DIR"
     import_from_dir "$TMP_DIR/archive"
+    ;;
+  move-device)
+    INCLUDE_WORK_DIR=true
+    parse_common_options "$@"
+
+    echo "Moving local files directly:"
+    echo "  source repo: $SOURCE_DIR"
+    echo "  target repo: $TARGET_DIR"
+    if [[ "$INCLUDE_WORK_DIR" == true ]]; then
+      echo "  source work dir: $SOURCE_WORK_DIR"
+      echo "  target work dir: $TARGET_WORK_DIR"
+    else
+      echo "  runtime work dir: skipped"
+    fi
+
+    for path in "${REPO_LOCAL_FILES[@]}"; do
+      copy_item "$SOURCE_DIR/$path" "$TARGET_DIR/$path"
+    done
+    if [[ "$INCLUDE_WORK_DIR" == true ]]; then
+      copy_item "$SOURCE_WORK_DIR" "$TARGET_WORK_DIR"
+    fi
     ;;
   -h|--help|"")
     usage

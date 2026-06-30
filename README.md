@@ -99,6 +99,19 @@ rye run local-files export-zip /tmp/ina-device-hub-local-files.zip --include-wor
 rye run local-files import-zip /tmp/ina-device-hub-local-files.zip --include-work-dir --overwrite
 ```
 
+旧デバイスのストレージを新デバイスにマウントして直接コピーできる場合は、`move-device` で repository 配下のローカル設定と `WORK_DIR` をまとめて移せます。
+
+```bash
+rye run local-files move-device \
+  --source-dir /mnt/old-device/home/claw-agri/ina-device-hub \
+  --target-dir /home/claw-agri/ina-device-hub \
+  --source-work-dir /mnt/old-device/home/claw-agri/.ina-device-hub \
+  --target-work-dir /home/claw-agri/.ina-device-hub \
+  --overwrite
+```
+
+実行前確認だけなら `--dry-run` を付けます。`WORK_DIR` を移さない場合は `--no-work-dir` を指定してください。
+
 手動でテンプレートを配置する場合
 
 ```bash
